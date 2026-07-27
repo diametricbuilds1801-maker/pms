@@ -110,7 +110,7 @@
       <button id="btn-bw" onclick="toggleGrayscale()" class="no-print" title="Toggle black &amp; white view (useful for printing or low-colour displays)" style="font-size:11px; padding:5px 9px; margin-top:1px; flex-shrink:0;"><i class="ti ti-contrast-2" style="font-size:14px;"></i></button>
       <button id="btn-theme" onclick="toggleTheme()" class="no-print" title="Switch between dark and light theme" style="font-size:11px; padding:5px 9px; margin-top:1px; flex-shrink:0;"><i class="ti ti-moon" style="font-size:14px;"></i></button>
       <div>
-        <div style="font-size:11px; font-weight:700; color:var(--gold); letter-spacing:1px;">DIAMETRIC BUILDS <span style="font-weight:400; color:var(--text-muted); letter-spacing:0;">· build 2026-07-27-localbackup</span></div>
+        <div style="font-size:11px; font-weight:700; color:var(--gold); letter-spacing:1px;">DIAMETRIC BUILDS <span style="font-weight:400; color:var(--text-muted); letter-spacing:0;">· build 2026-07-27-safetynet</span></div>
         <h1>DB Planning Project — critical chain planner &amp; tracker</h1>
         <div style="font-size:11.5px; color:var(--text-secondary); margin-top:2px;">Currently editing: <span id="active-project-badge" style="font-weight:600; color:var(--gold);"></span></div>
       </div>
@@ -175,7 +175,7 @@
       </label>
       <span id="sync-status" style="font-size:11px; color:var(--text-secondary);"></span>
     </div>
-    <p style="font-size:11px; color:var(--text-secondary); margin:6px 0 0; max-width:900px;">One-time setup: paste <code>Code.gs</code> as a standalone Apps Script project, run <code>authorize()</code> once, deploy as a Web App ("Anyone" access), and paste the deployment URL above. Nothing is created on the Sheet until you click "Create project" — after that, "Auto-sync" (if ticked) pushes shortly after every change, and the same button turns into "Sync now" for an immediate manual push. This way, typing a placeholder name or just trying the tool out doesn't spawn a real Google Sheet by itself. This tool no longer auto-loads from the Sheet on its own (that used to risk overwriting newer edits sitting only in this browser) — use "Reload from Sheet" above whenever you deliberately want the Sheet's copy instead. This same URL works for every project — each gets its own Sheet, auto-created inside a fixed Drive folder and auto-shared as "anyone with the link can view." After a sync, the link appears next to the status below.</p>
+    <p style="font-size:11px; color:var(--text-secondary); margin:6px 0 0; max-width:900px;">One-time setup: paste <code>Code.gs</code> as a standalone Apps Script project, run <code>authorize()</code> once, deploy as a Web App ("Anyone" access), and paste the deployment URL above. Nothing is created on the Sheet until you click "Create project" — after that, "Auto-sync" (if ticked) pushes shortly after every change, plus every 10 seconds on its own regardless, so anything not yet synced always catches up on its own within a few seconds — no need to re-edit a field to get it to save. The same button turns into "Sync now" for an immediate manual push. This way, typing a placeholder name or just trying the tool out doesn't spawn a real Google Sheet by itself. This tool no longer auto-loads from the Sheet on its own (that used to risk overwriting newer edits sitting only in this browser) — use "Reload from Sheet" above whenever you deliberately want the Sheet's copy instead. This same URL works for every project — each gets its own Sheet, auto-created inside a fixed Drive folder and auto-shared as "anyone with the link can view." After a sync, the link appears next to the status below.</p>
 
     <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-top:10px; font-size:12px;">
       <label style="color:var(--text-secondary);">Switch project</label>
@@ -3061,6 +3061,14 @@ if(typeof window.addEventListener === 'function'){
 createAll();
 resetHistory();
 applyTheme();
+// Safety-net resync: every 10 seconds, push the CURRENT full state to the Sheet (if auto-sync is
+// on and the project already exists) — independent of the per-edit debounce. This catches the
+// rare case where a value was still mid-edit right as a debounced sync fired and so didn't make
+// it into that particular push: within ~10s, the next automatic push always carries whatever is
+// actually in the fields at that moment, without needing to touch/re-edit anything manually.
+setInterval(() => {
+  if(autoSync && projectExists && syncUrl && !syncInFlight) syncToSheet(false);
+}, 10000);
 document.addEventListener('keydown', function(ev){
   const mod = ev.ctrlKey || ev.metaKey;
   if(!mod) return;
