@@ -2790,8 +2790,12 @@ function submitViaHiddenForm_(payloadStr){
     const onLoad = () => finish();
     iframe.addEventListener('load', onLoad);
     // Fallback in case the load event doesn't fire reliably for this cross-origin response —
-    // never block the UI waiting forever on it.
-    setTimeout(finish, 4000);
+    // never block the UI waiting forever on it. Kept generous (20s) because a large project's
+    // sync can genuinely take several seconds server-side; resolving too early here would let a
+    // second sync start while the first is still mid-write, which is exactly what causes rows to
+    // land jumbled/misaligned on the Sheet (the backend now also locks against that server-side,
+    // but avoiding the overlap here too keeps things snappier).
+    setTimeout(finish, 20000);
     form.submit();
   });
 }
