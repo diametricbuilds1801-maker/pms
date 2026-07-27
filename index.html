@@ -2732,12 +2732,19 @@ function scheduleAutoSync(){
   syncTimer = setTimeout(() => syncToSheet(false), 2500);
 }
 let lastSheetUrl = '';
-async function syncToSheet(manual){
+// Apps Script Web Apps sometimes redirect the POST response through script.googleusercontent.com,
+// and that redirected response occasionally comes back without proper CORS headers — a known,
+// intermittent Google-side quirk, not a config problem. A plain network failure (not an ok:false
+// from the server) is usually just that quirk, so retry a few times with a short backoff before
+// giving up — most of these clear up on the very next attempt.
+async function syncToSheet(manual, attempt){
+  attempt = attempt || 1;
   if(!syncUrl){ if(manual) renderSyncStatus('Paste the Web App URL first', true); return; }
   if(!meta.name || !meta.name.trim()){ if(manual) renderSyncStatus('Set a Project name first (Summary tab) — nothing is created until then', true); return; }
   if(syncInFlight) return;
   syncInFlight = true;
   if(manual) renderSyncStatus(projectExists ? 'Syncing…' : 'Creating…');
+  else if(attempt > 1) renderSyncStatus('Syncing… (retry ' + attempt + '/3)');
   try {
     // No custom headers on purpose — a plain string body keeps this a CORS "simple request" so the
     // Apps Script Web App doesn't need to handle an OPTIONS preflight (see Code.gs notes).
@@ -2752,7 +2759,13 @@ async function syncToSheet(manual){
       renderSyncStatus('Sync failed: ' + (data && data.error ? data.error : 'unknown error'), true);
     }
   } catch(err){
-    renderSyncStatus('Sync failed: ' + err.message, true);
+    syncInFlight = false;
+    if(attempt < 3){
+      renderSyncStatus('Sync hiccup, retrying… (' + attempt + '/3)', true);
+      setTimeout(() => syncToSheet(manual, attempt + 1), 1500 * attempt);
+      return;
+    }
+    renderSyncStatus('Sync failed after 3 tries: ' + err.message + ' — click Sync now to try again', true);
   } finally {
     syncInFlight = false;
   }
