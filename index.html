@@ -161,14 +161,14 @@
     <p style="font-size:13px; font-weight:600; color:var(--gold); margin:20px 0 8px; border-top:0.5px solid var(--border); padding-top:14px;">Google Sheet sync</p>
     <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; font-size:12px; max-width:900px;">
       <input type="text" id="sync-url" placeholder="Paste Apps Script Web App URL (from the bundled Code.gs deployment)" oninput="syncUrl=this.value;" onchange="onSyncUrlSet();" style="flex:1; min-width:280px; height:28px; font-size:11.5px;">
-      <button onclick="syncToSheet(true)" style="font-size:12px; padding:6px 12px;" title="Push current data to the Google Sheet now"><i class="ti ti-cloud-upload" style="font-size:14px; vertical-align:-2px; margin-right:4px;"></i>Sync now</button>
-      <label style="display:flex; align-items:center; gap:5px; font-size:11.5px; color:var(--text-secondary);">
-        <input type="checkbox" id="sync-auto" onchange="autoSync=this.checked; if(autoSync) syncToSheet(false);" style="width:auto; height:auto;">
+      <button id="sync-btn" onclick="syncToSheet(true)" style="font-size:12px; padding:6px 12px;" title="Create the Google Sheet for this project and push current data to it"><i class="ti ti-cloud-upload" style="font-size:14px; vertical-align:-2px; margin-right:4px;"></i>Create project</button>
+      <label id="sync-auto-label" style="display:flex; align-items:center; gap:5px; font-size:11.5px; color:var(--text-secondary);" title="Only takes effect once the project has been created (button on the left)">
+        <input type="checkbox" id="sync-auto" onchange="autoSync=this.checked; if(autoSync && projectExists) syncToSheet(false);" style="width:auto; height:auto;">
         Auto-sync on every change
       </label>
       <span id="sync-status" style="font-size:11px; color:var(--text-secondary);"></span>
     </div>
-    <p style="font-size:11px; color:var(--text-secondary); margin:6px 0 0; max-width:900px;">One-time setup: paste <code>Code.gs</code> as a standalone Apps Script project, run <code>authorize()</code> once, deploy as a Web App ("Anyone" access), and paste the deployment URL above. This same URL works for every project — each gets its own Google Sheet, auto-created inside a fixed Drive folder and auto-shared as "anyone with the link can view." After a sync, the link appears next to the status below.</p>
+    <p style="font-size:11px; color:var(--text-secondary); margin:6px 0 0; max-width:900px;">One-time setup: paste <code>Code.gs</code> as a standalone Apps Script project, run <code>authorize()</code> once, deploy as a Web App ("Anyone" access), and paste the deployment URL above. Nothing is created on the Sheet until you click "Create project" — after that, "Auto-sync" (if ticked) keeps pushing every change, and the same button turns into "Sync now" for manual pushes. This way, typing a placeholder name or just trying the tool out doesn't spawn a real Google Sheet by itself. This same URL works for every project — each gets its own Sheet, auto-created inside a fixed Drive folder and auto-shared as "anyone with the link can view." After a sync, the link appears next to the status below.</p>
 
     <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-top:10px; font-size:12px;">
       <label style="color:var(--text-secondary);">Switch project</label>
@@ -385,6 +385,10 @@ let autoSync = true;
 let syncTimer = null;
 let syncInFlight = false;
 let lastSyncAt = '';
+// projectExists gates auto-sync: nothing is pushed to the Sheet until the person explicitly
+// clicks "Create project" (or loads/switches to a project that already has a Sheet). This stops
+// a placeholder name typed while trying the tool out from silently spawning a real Google Sheet.
+let projectExists = false;
 const BASE_PXW = 5;
 let historyStack = [];
 let historyPos = -1;
@@ -2257,15 +2261,16 @@ async function autoPullLatest(){
       if(!meta.dayStart) meta.dayStart = '08:00';
       if(meta.qaLink===undefined) meta.qaLink = '';
       if(!meta.team) meta.team = emptyTeam();
+      projectExists = true; // a Sheet already exists for this project name
       createAll();
       suppressSnapshot = false;
       resetHistory();
       renderSyncStatus('Loaded latest data for "'+meta.name+'" from the Sheet');
     }
     // data.ok===false just means this project hasn't synced yet — keep the current data as-is,
-    // the next edit will create its Sheet.
+    // and projectExists stays false until "Create project" is clicked.
   } catch(err){
-    // silent — the person can still use "Sync now" or the "Switch project" dropdown manually
+    // silent — the person can still use "Create project" / "Sync now" or the "Switch project" dropdown manually
   }
 }
 
@@ -2576,6 +2581,7 @@ function resetAll(){
   meta = s.meta; lookahead = s.lookahead; daily = s.daily; readiness_ = s.readiness_||{days:7}; zoomPct = s.zoomPct||100;
   criticalTasks = s.criticalTasks; feedingChains = s.feedingChains; vendorPayments = s.vendorPayments;
   syncUrl = s.syncUrl||''; autoSync = s.autoSync||false;
+  projectExists = false; // sample data is local-only until "Create project" is clicked again
   createAll();
   suppressSnapshot = false;
   resetHistory();
@@ -2598,6 +2604,7 @@ function newProject(){
   feedingChains = [];
   vendorPayments = [];
   lastSheetUrl = '';
+  projectExists = false; // new/untitled project — nothing gets created until "Create project" is clicked
   createAll();
   suppressSnapshot = false;
   resetHistory();
@@ -2694,17 +2701,33 @@ function buildSyncPayload(){
   };
 }
 function fmtISO(d){ return d.toISOString().slice(0,10); }
+// button reads "Create project" until a Sheet actually exists for this project, then flips to
+// "Sync now" — keeps the wording honest about what clicking it will do.
+function renderSyncButton(){
+  const btn = document.getElementById('sync-btn'); if(!btn) return;
+  if(projectExists){
+    btn.innerHTML = '<i class="ti ti-cloud-upload" style="font-size:14px; vertical-align:-2px; margin-right:4px;"></i>Sync now';
+    btn.title = 'Push current data to the Google Sheet now';
+  } else {
+    btn.innerHTML = '<i class="ti ti-cloud-upload" style="font-size:14px; vertical-align:-2px; margin-right:4px;"></i>Create project';
+    btn.title = 'Create the Google Sheet for this project and push current data to it';
+  }
+}
 function renderSyncStatus(msg, isErr){
+  renderSyncButton();
   const el = document.getElementById('sync-status'); if(!el) return;
   const linkHtml = lastSheetUrl ? ` · <a href="${escHtml(lastSheetUrl)}" target="_blank" rel="noopener">Open Sheet</a>` : '';
   if(msg){ el.innerHTML = escHtml(msg) + linkHtml; el.style.color = isErr ? 'var(--red)' : 'var(--green)'; return; }
+  if(!projectExists){ el.innerHTML = (syncUrl ? 'Not created yet — click "Create project" when ready' : '') + linkHtml; el.style.color = 'var(--text-secondary)'; return; }
   el.innerHTML = (lastSyncAt ? ('Last synced ' + lastSyncAt) : (syncUrl ? 'Not synced yet' : '')) + linkHtml;
   el.style.color = 'var(--text-secondary)';
 }
 // debounced trigger called from update() — fires ~2.5s after the last edit so rapid typing doesn't
-// spam the Apps Script endpoint (each sync rewrites every sheet tab, which isn't free).
+// spam the Apps Script endpoint (each sync rewrites every sheet tab, which isn't free). Gated on
+// projectExists so editing a not-yet-created project never silently spawns a Sheet on its own —
+// that only happens via an explicit "Create project" click.
 function scheduleAutoSync(){
-  if(!autoSync || !syncUrl || !meta.name || !meta.name.trim()) return;
+  if(!autoSync || !projectExists || !syncUrl || !meta.name || !meta.name.trim()) return;
   clearTimeout(syncTimer);
   syncTimer = setTimeout(() => syncToSheet(false), 2500);
 }
@@ -2714,13 +2737,14 @@ async function syncToSheet(manual){
   if(!meta.name || !meta.name.trim()){ if(manual) renderSyncStatus('Set a Project name first (Summary tab) — nothing is created until then', true); return; }
   if(syncInFlight) return;
   syncInFlight = true;
-  if(manual) renderSyncStatus('Syncing…');
+  if(manual) renderSyncStatus(projectExists ? 'Syncing…' : 'Creating…');
   try {
     // No custom headers on purpose — a plain string body keeps this a CORS "simple request" so the
     // Apps Script Web App doesn't need to handle an OPTIONS preflight (see Code.gs notes).
     const res = await fetch(syncUrl, {method:'POST', body: JSON.stringify(buildSyncPayload())});
     const data = await res.json();
     if(data && data.ok){
+      projectExists = true;
       lastSyncAt = new Date().toLocaleTimeString('en-IN', {hour:'2-digit', minute:'2-digit'});
       lastSheetUrl = data.sheetUrl || '';
       renderSyncStatus('Synced ' + lastSyncAt);
@@ -2787,6 +2811,7 @@ async function onProjectPicked(name){
     if(!meta.team) meta.team = emptyTeam();
     // keep this tool's own syncUrl/autoSync — don't let a loaded project silently change them
     lastSheetUrl = '';
+    projectExists = true; // switched to a project that already has a Sheet
     createAll();
     suppressSnapshot = false;
     resetHistory();
