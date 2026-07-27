@@ -399,6 +399,8 @@ let lastSyncAt = '';
 // happens on a fixed 30-second timer below, not on every keystroke, so rapid edits don't spam
 // the Apps Script endpoint with a request per change.
 let syncDirty = false;
+// holds the timer for the "retry once more after 60s" fallback when the 3 quick retries all fail
+let fallbackRetryTimer = null;
 // projectExists gates auto-sync: nothing is pushed to the Sheet until the person explicitly
 // clicks "Create project" (or loads/switches to a project that already has a Sheet). This stops
 // a placeholder name typed while trying the tool out from silently spawning a real Google Sheet.
@@ -2624,6 +2626,7 @@ function resetAll(){
 function newProject(){
   if(!confirm('Clear all tasks, dates and project details to start a brand new project in this file? This cannot be undone (use Save data first if you want to keep a backup).')) return;
   clearTimeout(syncTimer); // cancel any auto-sync still queued for the project we're leaving
+  clearTimeout(fallbackRetryTimer);
   syncDirty = false;
   suppressSnapshot = true;
   meta = {name:'', client:'', location:'', start:new Date().toISOString().slice(0,10), deliveryDate:'', dayStart:'08:00', qaLink:'', team: emptyTeam()};
@@ -2820,6 +2823,7 @@ async function syncToSheet(manual, attempt){
     } catch(confirmErr){ /* form submission likely still went through even if this confirmation didn't */ }
     projectExists = true;
     lastSyncAt = new Date().toLocaleTimeString('en-IN', {hour:'2-digit', minute:'2-digit'});
+    clearTimeout(fallbackRetryTimer);
     renderSyncStatus(confirmed ? ('Synced ' + lastSyncAt) : ('Sent ' + lastSyncAt + ' — could not confirm, check the Sheet'));
   } catch(err){
     syncInFlight = false;
@@ -2828,7 +2832,13 @@ async function syncToSheet(manual, attempt){
       setTimeout(() => syncToSheet(manual, attempt + 1), 1200 * attempt);
       return;
     }
-    renderSyncStatus('Sync failed after 3 tries: ' + err.message + ' — click Sync now to try again', true);
+    renderSyncStatus('Sync failed after 3 tries: ' + err.message + ' — retrying again in 1 min (or click Sync now)', true);
+    // 3 quick retries all failed — instead of giving up, try once more in a minute. By the time
+    // this fires, buildSyncPayload() (called fresh inside syncToSheet) picks up whatever is
+    // CURRENTLY in the fields, not whatever was there a minute ago, so it always sends the latest
+    // values rather than stale/old data.
+    clearTimeout(fallbackRetryTimer);
+    fallbackRetryTimer = setTimeout(() => syncToSheet(false), 60000);
   } finally {
     syncInFlight = false;
   }
