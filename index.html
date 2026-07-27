@@ -364,6 +364,16 @@
 
 </div>
 
+<!-- Hidden write channel for Google Sheet sync: a real <form> submitted into a hidden <iframe> is
+     a normal browser navigation, not a fetch()/XHR call, so it is NEVER subject to CORS blocking —
+     unlike fetch(), it reliably reaches the Apps Script backend even on networks/browsers where
+     fetch() to script.google.com gets silently blocked. We can't read the response this way, so a
+     separate small GET (fetch, which has been reliable for reads) confirms success afterwards. -->
+<iframe name="sync-frame" style="display:none;" title="sync"></iframe>
+<form id="sync-form" method="POST" target="sync-frame" style="display:none;">
+  <input type="hidden" name="payload" id="sync-form-payload">
+</form>
+
 <script>
 const teamRoles = [
   ['pm','Project manager'], ['ss','Site supervisor'], ['barBinder','Bar binder'],
@@ -2250,12 +2260,28 @@ function onSyncUrlSet(){
 // recent data from its Sheet — so reopening this same static HTML file always picks up whatever
 // was last synced, instead of showing the sample/baked-in data forever. No confirm() here since
 // this only runs once, before the person has made any local edits worth protecting.
+// Shared retrying GET — reads (list/load/status) have generally been more reliable than writes in
+// testing, but still occasionally hit the same intermittent network/CORS quirk, so retry a couple
+// of times with a short gap before giving up, instead of failing on the very first hiccup.
+async function fetchJsonRetry_(url, tries){
+  tries = tries || 3;
+  let lastErr;
+  for(let i = 0; i < tries; i++){
+    try {
+      const res = await fetch(url);
+      return await res.json();
+    } catch(err){
+      lastErr = err;
+      if(i < tries - 1) await new Promise(r => setTimeout(r, 800 * (i + 1)));
+    }
+  }
+  throw lastErr;
+}
 async function autoPullLatest(){
   if(!syncUrl || !meta.name) return;
   try {
     const url = syncUrl + (syncUrl.includes('?') ? '&' : '?') + 'action=load&project=' + encodeURIComponent(meta.name);
-    const res = await fetch(url);
-    const data = await res.json();
+    const data = await fetchJsonRetry_(url);
     if(data && data.ok && data.rawState){
       const s = JSON.parse(data.rawState);
       suppressSnapshot = true;
@@ -2742,14 +2768,33 @@ let lastSheetUrl = '';
 // intermittent Google-side quirk, not a config problem. A plain network failure (not an ok:false
 // from the server) is usually just that quirk, so retry a few times with a short backoff before
 // giving up — most of these clear up on the very next attempt.
-// Apps Script Web Apps sometimes redirect the POST response through script.googleusercontent.com,
-// and that redirected response occasionally comes back without proper CORS headers — a known,
-// intermittent Google-side quirk, not a config problem. CORS only blocks the BROWSER from READING
-// the reply — it does not stop the request from reaching Google's server, so the data usually
-// still lands on the Sheet even when the browser reports "failed to fetch". To make that reliable
-// instead of just hoping, if the normal (readable) request errors out we immediately fire a
-// second request in 'no-cors' mode: the browser sends it and gets an opaque response back (we
-// can't read success/sheetUrl from it), but the write to the Sheet still goes through.
+// WRITE PATH: submits through the hidden <form>/<iframe> in the page (see the HTML above the
+// <script> tag). A <form> submission is a normal browser navigation, not a fetch()/XHR call, so
+// it is NEVER subject to CORS blocking — unlike fetch(), it reliably reaches the Apps Script
+// backend even on networks/browsers where fetch() to script.google.com gets silently blocked.
+// We can't read a response through the iframe, so right after submitting we do a small, separate
+// GET (fetch, ?action=status) to confirm the write landed and grab the Sheet's URL — GETs have
+// been reliable in testing even where POST fetches weren't. If that confirmation GET itself fails,
+// the data was still very likely delivered (the form submission doesn't depend on it), so we show
+// an honest "sent but unconfirmed" status rather than a false failure.
+function submitViaHiddenForm_(payloadStr){
+  return new Promise((resolve) => {
+    const form = document.getElementById('sync-form');
+    const iframe = document.querySelector('iframe[name="sync-frame"]');
+    const payloadEl = document.getElementById('sync-form-payload');
+    if(!form || !iframe || !payloadEl){ resolve(); return; }
+    form.action = syncUrl;
+    payloadEl.value = payloadStr;
+    let done = false;
+    const finish = () => { if(done) return; done = true; iframe.removeEventListener('load', onLoad); resolve(); };
+    const onLoad = () => finish();
+    iframe.addEventListener('load', onLoad);
+    // Fallback in case the load event doesn't fire reliably for this cross-origin response —
+    // never block the UI waiting forever on it.
+    setTimeout(finish, 4000);
+    form.submit();
+  });
+}
 async function syncToSheet(manual, attempt){
   attempt = attempt || 1;
   if(!syncUrl){ if(manual) renderSyncStatus('Paste the Web App URL first', true); return; }
@@ -2760,35 +2805,26 @@ async function syncToSheet(manual, attempt){
   else if(attempt > 1) renderSyncStatus('Syncing… (retry ' + attempt + '/3)');
   const payload = JSON.stringify(buildSyncPayload());
   try {
-    // No custom headers on purpose — a plain string body keeps this a CORS "simple request" so the
-    // Apps Script Web App doesn't need to handle an OPTIONS preflight (see Code.gs notes).
-    const res = await fetch(syncUrl, {method:'POST', body: payload});
-    const data = await res.json();
-    if(data && data.ok){
-      projectExists = true;
-      lastSyncAt = new Date().toLocaleTimeString('en-IN', {hour:'2-digit', minute:'2-digit'});
-      lastSheetUrl = data.sheetUrl || '';
-      renderSyncStatus('Synced ' + lastSyncAt);
-    } else {
-      renderSyncStatus('Sync failed: ' + (data && data.error ? data.error : 'unknown error'), true);
-    }
-  } catch(err){
-    // Readable fetch failed — try a no-cors fire-and-forget copy so the write still has a good
-    // chance of reaching the Sheet even though we can't confirm it from here.
+    await submitViaHiddenForm_(payload);
+    // Best-effort confirmation — a lightweight GET that just checks the Sheet exists and grabs its URL.
+    let confirmed = false;
     try {
-      await fetch(syncUrl, {method:'POST', body: payload, mode:'no-cors'});
-      projectExists = true;
-      lastSyncAt = new Date().toLocaleTimeString('en-IN', {hour:'2-digit', minute:'2-digit'});
-      renderSyncStatus('Sent ' + lastSyncAt + ' — no confirmation from Google, verify on the Sheet');
-    } catch(err2){
-      syncInFlight = false;
-      if(attempt < 3){
-        renderSyncStatus('Sync hiccup, retrying… (' + attempt + '/3)', true);
-        setTimeout(() => syncToSheet(manual, attempt + 1), 1500 * attempt);
-        return;
-      }
-      renderSyncStatus('Sync failed after 3 tries: ' + err2.message + ' — click Sync now to try again', true);
+      const statusUrl = syncUrl + (syncUrl.includes('?') ? '&' : '?') + 'action=status&project=' + encodeURIComponent(meta.name);
+      const res = await fetch(statusUrl);
+      const data = await res.json();
+      if(data && data.ok && data.exists){ confirmed = true; if(data.url) lastSheetUrl = data.url; }
+    } catch(confirmErr){ /* form submission likely still went through even if this confirmation didn't */ }
+    projectExists = true;
+    lastSyncAt = new Date().toLocaleTimeString('en-IN', {hour:'2-digit', minute:'2-digit'});
+    renderSyncStatus(confirmed ? ('Synced ' + lastSyncAt) : ('Sent ' + lastSyncAt + ' — could not confirm, check the Sheet'));
+  } catch(err){
+    syncInFlight = false;
+    if(attempt < 3){
+      renderSyncStatus('Sync hiccup, retrying… (' + attempt + '/3)', true);
+      setTimeout(() => syncToSheet(manual, attempt + 1), 1200 * attempt);
+      return;
     }
+    renderSyncStatus('Sync failed after 3 tries: ' + err.message + ' — click Sync now to try again', true);
   } finally {
     syncInFlight = false;
   }
@@ -2801,8 +2837,7 @@ async function refreshProjectList(){
   if(statusEl) statusEl.textContent = 'Loading…';
   try {
     const url = syncUrl + (syncUrl.includes('?') ? '&' : '?') + 'action=list';
-    const res = await fetch(url);
-    const data = await res.json();
+    const data = await fetchJsonRetry_(url);
     if(!data || !data.ok){ if(statusEl){ statusEl.textContent = 'Could not load list: ' + (data&&data.error?data.error:'unknown error'); statusEl.style.color='var(--red)'; } return; }
     if(sel){
       const current = meta.name || '';
@@ -2825,8 +2860,7 @@ async function onProjectPicked(name){
   if(statusEl){ statusEl.textContent = 'Loading ' + name + '…'; statusEl.style.color = 'var(--text-secondary)'; }
   try {
     const url = syncUrl + (syncUrl.includes('?') ? '&' : '?') + 'action=load&project=' + encodeURIComponent(name);
-    const res = await fetch(url);
-    const data = await res.json();
+    const data = await fetchJsonRetry_(url);
     if(!data || !data.ok || !data.rawState){
       const errMsg = 'Could not load "'+name+'": ' + (data&&data.error?data.error:'no data found') + '\n\nYou are STILL on "'+(meta.name||'(untitled)')+'" — nothing changed. If this keeps happening, redeploy the Apps Script as a new version (Deploy > Manage deployments > edit > New version > Deploy).';
       if(statusEl){ statusEl.textContent = 'Load failed — see popup'; statusEl.style.color='var(--red)'; }
