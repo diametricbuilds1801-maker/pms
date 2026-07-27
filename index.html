@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>DB Planning Project — Diametric Builds</title>
+<title>Residential Build — Stilt + 4 · CCPM Project Tool · Diametric Builds</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/tabler-icons/2.44.0/iconfont/tabler-icons.min.css">
 <style>
   :root {
@@ -138,7 +138,7 @@
     <button class="tabbtn active" id="tb-summary" onclick="showTab('summary')">Summary</button>
     <button class="tabbtn" id="tb-gantt" onclick="showTab('gantt')">Gantt chart</button>
     <button class="tabbtn" id="tb-list" onclick="showTab('list')">Task list</button>
-    <button class="tabbtn" id="tb-lookahead" onclick="showTab('lookahead')">3-day look-ahead</button>
+    <button class="tabbtn" id="tb-lookahead" onclick="showTab('lookahead')">3 days planning</button>
     <button class="tabbtn" id="tb-daily" onclick="showTab('daily')">Daily follow-up</button>
     <button class="tabbtn" id="tb-vendors" onclick="showTab('vendors')">Material &amp; Resource</button>
   </div>
@@ -275,7 +275,7 @@
     </div>
   </div>
 
-  <h2 class="print-heading">3-day look-ahead</h2>
+  <h2 class="print-heading">3 days planning</h2>
   <div id="tab-lookahead" style="display:none; background:var(--surface-2); border:0.5px solid var(--border); border-top:none; border-radius:0 0 8px 8px; padding:1.2rem;">
     <div style="display:flex; align-items:center; gap:16px; flex-wrap:wrap; margin-bottom:12px;">
       <div style="display:flex; align-items:center; gap:6px; font-size:13px;">
@@ -327,7 +327,10 @@
   <h2 class="print-heading">Material &amp; Resource</h2>
   <div id="tab-vendors" style="display:none; background:var(--surface-2); border:0.5px solid var(--border); border-top:none; border-radius:0 0 8px 8px; padding:1.2rem; overflow-x:auto;">
     <p style="font-size:13px; font-weight:600; color:var(--gold); margin:0 0 6px;">Material &amp; resource readiness — next 7–10 days</p>
-    <p style="font-size:12px; color:var(--text-secondary); margin:0 0 10px; max-width:900px;">To be filled by the person managing the project. For every task starting soon, confirm all three — Information, Material and Labour — are arranged and on site. <b>Work shall not start on a task until all three are confirmed</b>, so material reaches on time and resources are managed for a seamless flow into the next task.</p>
+    <p style="font-size:12px; color:var(--text-secondary); margin:0 0 10px; max-width:1000px;">To be filled by the person managing the project. For every task starting soon, confirm all three — <b>Drawings</b>, <b>Material</b> and <b>Labour</b> — before the task is released. <b>Work shall not start on a task until all three are confirmed</b>, so material reaches on time and resources are managed for a seamless flow into the next task.<br>
+    <span style="color:var(--text-muted);"><b>Drawings</b> — the GFC / shop drawing the crew works from is issued, current revision, and on site.&nbsp;&nbsp;
+    <b>Material</b> — paste the <b>MR (material request) link</b>; tick only once the MR is raised, approved and the material is received and tallied at site.&nbsp;&nbsp;
+    <b>Labour</b> — the process coordinator asks the labour contractor whether the manpower for this specific work is available and whether he is facing any issue. Paste the <b>Google Form link</b> the contractor fills; the FMS runs off that form's responses, and the box is ticked only on a confirmed "available, no issues".</span></p>
     <div style="display:flex; align-items:center; gap:8px; margin-bottom:10px;">
       <label style="font-size:12.5px;">Window (days)</label>
       <input type="number" id="rd-days" min="7" max="10" step="1" value="7" onchange="readiness_.days=Math.max(7,Math.min(10,Number(this.value)||7)); update();" style="height:28px; width:56px;">
@@ -337,7 +340,7 @@
       <thead>
         <tr>
           <th class="l">Task</th><th class="l">Type</th><th>Starts</th><th class="l">In</th>
-          <th class="l">Information</th><th class="l">Material</th><th class="l">Labour</th><th class="l">Status</th>
+          <th class="l">Drawings</th><th class="l">Material (MR link)</th><th class="l">Labour (contractor form)</th><th class="l">Status</th>
         </tr>
       </thead>
       <tbody id="rdrows"></tbody>
@@ -369,7 +372,7 @@ const teamRoles = [
 ];
 function emptyTeam(){ const t={}; teamRoles.forEach(([k])=>{ t[k]={name:'',phone:''}; }); return t; }
 
-let meta = {name:'P133 — Structure Execution (Stilt + 4 Floors + Mumty)', client:'Gaurav Sachdeva', location:'Preet Vihar, Delhi, 110092, India', start:'2026-06-15', deliveryDate:'', dayStart:'08:00', qaLink:'', team: emptyTeam()};
+let meta = {name:'Residential Build — Stilt + 4 + Mumty & Lift (300 sq yd)', client:'[Client name]', location:'[Site address]', start:'2026-08-01', deliveryDate:'2028-07-10', dayStart:'08:00', qaLink:'', team: emptyTeam()};
 let activeTabId = 'summary';
 let lookahead = {from: new Date().toISOString().slice(0,10), days: 3};
 let readiness_ = {days: 7};
@@ -396,75 +399,257 @@ let dragSrcIndex = null;
 // listed constraint. Left blank (or a bare relation with no number, e.g. just "SS") it defaults to
 // the task directly above this one in its own list. See parsePreds()/schedule().
 function newTask(name,duration,plan){ return {name, duration, plan, act:'', adate:'', owner:'', notes:'', shift:'', preds:'', pct:0, infoReady:false, materialReady:false, labourReady:false, link:'', infoLink:'', materialLink:'', labourLink:'', qcLink:'', qcDone:false, vendor:'', taskType:'critical', buffer:0, subtasks:[], expanded:false}; }
+// ---------------------------------------------------------------------------------------------
+// PROJECT DATA — Residential build, 300 sq yd plot, stilt + 4 floors + mumty + lift,
+// 2,400 sq ft covered per floor. Structure + full turnkey interiors. CCPM, conservative 30% buffers.
+// Durations are AGGRESSIVE (50% confidence) — the safety lives in the buffers, not in the tasks.
+// ---------------------------------------------------------------------------------------------
+function mkSub(a){ var t = newTask(a[0], a[1], a[2]); t.owner = a[3]; t.vendor = a[4]; t.notes = a[5]; return t; }
+
 let criticalTasks = (function(){
   const arr = [];
-  function add(name,dur,owner){ const t = newTask(name,dur,0); t.owner = owner; arr.push(t); return t; }
-  // durations are estimated placeholders (not given in the source list) — adjust freely in the tool.
-  // "site dressing" is the very first activity with nothing ahead of it to protect with a buffer,
-  // so it sits directly on the critical chain rather than as a feeding chain (which would otherwise
-  // need to schedule backward into negative days before day 0).
-  add('site dressing', 2, 'Civil Contractor');
-  add('site layout', 1, 'Civil Contractor');
-  add('excavation', 4, 'Civil Contractor');
-  add('foundation layout', 1, 'Civil Contractor');
-  add('boulder laying', 2, 'Civil Contractor');
-  add('pcc casting', 1, 'Civil Contractor');
-  add('column layout', 1, 'Civil Contractor');
-  add('foundation bar binding', 3, 'Civil Contractor');
-  add('shuttering of foundation', 2, 'Civil Contractor');
-  add('casting of foundation', 1, 'Civil Contractor');
-  add('brickwork sub structure 9 inch', 4, 'Civil Contractor');
-  add('column casting su structure', 2, 'Civil Contractor');
-  add('bitument coat', 1, 'Civil Contractor');
-  add('back filling', 2, 'Civil Contractor');
-  add('plinth beam layout', 1, 'Civil Contractor');
-  add('plinth beam binding', 2, 'Civil Contractor');
-  add('plinth beam shuttering', 2, 'Civil Contractor');
-  add('column layout', 1, 'Civil Contractor');
-  add('column binding', 2, 'Civil Contractor');
-  add('starter making', 1, 'Civil Contractor');
-  add('column shuttering', 2, 'Civil Contractor');
-  add('column casting', 1, 'Civil Contractor');
-  add('shuttering making', 2, 'Civil Contractor');
-  add('shuttering developing', 2, 'Civil Contractor');
-  add('bar binding of steel', 3, 'Civil Contractor');
-  add('side shuttering + electrical conduit', 2, 'Civil Contractor');
-  add('casting of slab', 1, 'Civil Contractor');
-  add('deshuttering', 1, 'Civil Contractor');
-  add('internal plaster', 5, 'Civil Contractor');
-  add('Structure Work Complete', 0, '');
+  function phase(name, owner, subs){
+    const t = newTask(name, 0, 0); t.owner = owner; t.expanded = false;
+    t.subtasks = subs.map(mkSub); arr.push(t); return t;
+  }
+  phase("01 · Architecture & design freeze", "Architect", [
+    ["Site survey, levels & requirement brief freeze",4,60,"Architect","Survey agency","Plot 300 sq yd. Confirm setbacks, FAR, ground coverage before concept."],
+    ["Concept plan, zoning & 3D massing options",8,250,"Architect","","Stilt + 4 floors, 2,400 sq ft covered per floor + mumty + lift shaft."],
+    ["Client sign-off on concept & area statement",5,0,"Principal architect","","GATE: nothing downstream starts without written sign-off."],
+    ["GFC architectural drawings — stilt + 4 + mumty",14,520,"Architect","","Include lift shaft dimensions from lift vendor's shop drawing."],
+    ["Structural analysis & foundation GFC drawings",10,370,"Structural designer","","Needs SBC report from pre-construction. Raft vs isolated footing decided here."],
+  ]);
+  phase("02 · Pre-construction & site mobilisation", "Project manager", [
+    ["SBC soil testing — bore log, plate load test, report",6,85,"Project manager","Geotech lab","Feeds structural design. Book the lab in week 1 — 2-week queues are normal."],
+    ["Site boundary demarcation via local maintenance office",3,40,"Site supervisor","Local maintenance office","Get demarcation certificate on record before any excavation."],
+    ["Barricading + labour camp erection (barricading material kit)",5,240,"Site supervisor","Barricading contractor","MATERIAL: GI sheets, MS angles, ply, tin, camp bedding, water tank."],
+    ["Temporary bathroom, site office & team alignment on site",3,110,"Site supervisor","","Portable toilet, drinking water, first-aid, site office table + drawing board."],
+    ["RWA / local authority compliance, rules & contact register",3,35,"Project manager","RWA","Record RWA president + management phone numbers, work timing rules, debris rules."],
+    ["Bhumi poojan",1,45,"Project manager","","Coordinate date with client and pandit; blocks excavation start."],
+    ["Site essentials FULL KITTING — fencing, solar camera, solar light, signage, first material lot",4,285,"Project manager","","FULL KIT GATE: nothing on this phase closes until every item on the kit list is on site."],
+  ]);
+  phase("03 · Sub-structure — foundation & plinth", "Site supervisor", [
+    ["Excavation, shoring & dewatering",8,620,"Excavation contractor","JCB / earthwork vendor","Confirm neighbour party-wall condition and RWA debris disposal route first."],
+    ["PCC bed + anti-termite treatment",3,180,"Civil contractor","","MATERIAL: cement, sand, 40mm aggregate, anti-termite chemical."],
+    ["Raft / footing reinforcement & shuttering",7,1450,"Bar binder","Steel vendor","MATERIAL: full TMT lot for footing must be on site before day 1 of this task."],
+    ["Footing / raft concrete pour",2,1650,"Civil contractor","RMC supplier","Book RMC 7 days ahead. Pump + backup pump. Cube samples mandatory."],
+    ["Column starters up to plinth level",4,480,"Bar binder","","Check column setting-out against demarcation certificate before pouring."],
+    ["Plinth beam — shuttering, rebar & casting",6,780,"Civil contractor","","Include lift pit and sump/OHT plinth in the same pour where possible."],
+    ["Backfilling, compaction & curing",4,340,"Civil contractor","","Compact in 200mm layers. 7-day curing minimum before stilt columns."],
+  ]);
+  phase("04 · Superstructure — stilt level", "Site supervisor", [
+    ["Stilt columns — rebar, shuttering, casting",8,980,"Bar binder / Shuttering team","Steel vendor","MATERIAL: shuttering system + props must be on site before this starts."],
+    ["First-floor slab — deck, rebar, conduit sleeves, casting",12,1620,"Shuttering team","RMC supplier","Electrical conduit sleeves + plumbing sleeves laid before pour — no post-cutting."],
+    ["Curing & de-shuttering",7,300,"Civil contractor","","14-day curing, props retained for 21 days on the slab."],
+  ]);
+  phase("05 · Superstructure — 1st floor", "Site supervisor", [
+    ["1st-floor columns — rebar, shuttering, casting",7,900,"Bar binder / Shuttering team","Steel vendor","Check verticality and cover blocks before every pour."],
+    ["2nd-floor slab — deck, rebar, conduit, casting",11,1520,"Shuttering team","RMC supplier","Sleeves for lift shaft, shafts, AC piping to be fixed pre-pour."],
+    ["Curing & de-shuttering",7,280,"Civil contractor","",""],
+  ]);
+  phase("06 · Superstructure — 2nd floor", "Site supervisor", [
+    ["2nd-floor columns — rebar, shuttering, casting",7,900,"Bar binder / Shuttering team","Steel vendor",""],
+    ["3rd-floor slab — deck, rebar, conduit, casting",11,1520,"Shuttering team","RMC supplier",""],
+    ["Curing & de-shuttering",7,280,"Civil contractor","",""],
+  ]);
+  phase("07 · Superstructure — 3rd floor", "Site supervisor", [
+    ["3rd-floor columns — rebar, shuttering, casting",7,900,"Bar binder / Shuttering team","Steel vendor",""],
+    ["4th-floor slab — deck, rebar, conduit, casting",11,1520,"Shuttering team","RMC supplier",""],
+    ["Curing & de-shuttering",7,280,"Civil contractor","",""],
+  ]);
+  phase("08 · Superstructure — 4th floor, mumty & lift machine room", "Site supervisor", [
+    ["4th-floor columns — rebar, shuttering, casting",7,900,"Bar binder / Shuttering team","Steel vendor",""],
+    ["Terrace slab — deck, rebar, conduit, casting",11,1520,"Shuttering team","RMC supplier",""],
+    ["Mumty, lift machine room, parapet & OHT",10,950,"Civil contractor","","Lift machine room dimensions to be confirmed against lift vendor's approved GA drawing."],
+    ["Curing, de-shuttering & frame completion check",7,230,"Project manager","","GATE: structural completion sign-off by structural designer before façade starts."],
+  ]);
+  phase("09 · Masonry & blockwork — all levels", "Brickwork team", [
+    ["External brickwork — stilt to 2nd floor",10,720,"Brickwork team","Brick / AAC vendor","MATERIAL: full brick/AAC lot for lower half staged on site."],
+    ["External brickwork — 3rd & 4th floor",9,650,"Brickwork team","Brick / AAC vendor",""],
+    ["Internal partition blockwork — all floors",12,780,"Brickwork team","","Mark out from GFC before laying — late partition shifts are the #1 rework source."],
+    ["Door & window frame (chowkhat) fixing",5,380,"Carpentry team","Joinery vendor","MATERIAL: frames must be delivered and treated before this task."],
+    ["Lintels, sills & jambs",4,270,"Civil contractor","",""],
+  ]);
+  phase("10 · Internal conduiting & first-fix MEP", "Site supervisor", [
+    ["Electrical chasing & conduit laying — all floors",12,640,"Electrical contractor","Electrical vendor","MATERIAL: conduits, junction boxes, bends. Work off the approved MEP drawing only."],
+    ["Concealed plumbing lines & sleeves",8,520,"Plumbing contractor","Plumbing vendor","CPVC/PPR hot & cold lines. Fixture heights fixed against interior drawing."],
+    ["Drainage, soil stacks & shaft work",7,430,"Plumbing contractor","",""],
+    ["Pressure testing & first-fix sign-off",3,110,"Project manager","","GATE: 24-hr pressure test on all lines, photo record, signed before plaster."],
+  ]);
+  phase("11 · Plaster & waterproofing", "Civil contractor", [
+    ["Internal plaster — all floors",18,980,"Plaster team","","MATERIAL: cement + sand staged for the full run — plaster stopping mid-wall causes joints."],
+    ["External plaster & scaffolding",14,820,"Plaster team","Scaffolding vendor",""],
+    ["Toilet, terrace & OHT waterproofing + ponding test",8,560,"Waterproofing vendor","Waterproofing vendor","GATE: 48-hr ponding test with photo record before any tiling."],
+    ["Gypsum punning / POP finish",8,440,"POP contractor","",""],
+  ]);
+  phase("12 · Flooring & tiling", "Site supervisor", [
+    ["Toilet & kitchen wall + floor tiling",12,940,"Tiling team","Tile vendor","MATERIAL: full tile lot received, tallied and shade-matched before start."],
+    ["Bedroom, living & lobby floor laying (tile / marble)",14,1580,"Tiling team","Marble vendor","Lay a dry mock-up row for client approval on shade before fixing."],
+    ["Staircase treads, risers & cladding",7,620,"Tiling team","",""],
+    ["Balcony, terrace & stilt flooring",5,480,"Tiling team","","Anti-skid + correct slope to drain; recheck waterproofing before laying."],
+    ["Grinding, polishing & grouting",5,380,"Polishing vendor","",""],
+  ]);
+  phase("13 · Second fix — services, doors & fittings", "Site supervisor", [
+    ["False ceiling framing & boarding — all floors",12,880,"False ceiling contractor","Gypsum vendor","Coordinate light points, AC grills and curtain pelmets before boarding."],
+    ["Door shutters, frames finishing & hardware",9,760,"Carpentry team","Joinery vendor","MATERIAL: shutters + hardware sets delivered and counted."],
+    ["Windows, glazing & railing fixing",7,640,"Fabrication vendor","Fabrication vendor",""],
+    ["Wiring pulling, DBs, switchboards & fixtures",10,880,"Electrical contractor","Electrical vendor","MATERIAL: wires, DBs, modular plates, light fixtures fully kitted."],
+    ["Sanitary ware, faucets & CP fittings",7,840,"Plumbing contractor","Sanitary vendor","MATERIAL: faucets, WCs, basins, showers, drains — full kit before start."],
+  ]);
+  phase("14 · Painting & polishing", "Painting contractor", [
+    ["Wall putty & primer",10,420,"Painting contractor","Paint vendor",""],
+    ["Internal paint — finish coats",10,620,"Painting contractor","Paint vendor","Shade approval on a 2x2 ft site sample per room before full application."],
+    ["External texture / weatherproof paint",10,640,"Painting contractor","Paint vendor",""],
+    ["Wood polish, PU & metal enamel",7,220,"Polishing vendor","",""],
+  ]);
+  phase("15 · Interior fit-out — turnkey", "Interior project manager", [
+    ["Modular kitchen installation",8,1250,"Modular vendor","Modular vendor","MATERIAL: carcass, shutters, hardware, counter-top delivered and inspected."],
+    ["Wardrobes & storage installation",10,1450,"Modular vendor","Modular vendor",""],
+    ["TV units, vanities, study & bar units",8,1050,"Carpentry team","Joinery vendor",""],
+    ["Loose furniture & upholstery placement",6,980,"Interior project manager","Furniture vendor",""],
+    ["Lighting, curtains, décor & styling",6,770,"Interior project manager","Decor vendor","Final styling before client walkthrough — photograph for records."],
+  ]);
+  phase("16 · Testing, snagging & handover", "Project manager", [
+    ["MEP testing & commissioning — lift, pumps, DG, CCTV",6,180,"Project manager","","Every system run under load with the client's team present."],
+    ["Deep cleaning",4,120,"Housekeeping vendor","Housekeeping vendor",""],
+    ["Snag walkthrough with client",4,0,"Project manager","","Joint snag list, numbered, photographed, signed by both sides."],
+    ["Snag rectification",8,210,"Site supervisor","",""],
+    ["Completion docs, warranties, O&M manuals & keys",4,60,"Process coordinator","","As-built drawings, warranty cards, vendor contacts, key register."],
+    ["Handover to client",1,30,"Project manager","","MILESTONE: final payment released against signed handover note."],
+  ]);
   return arr;
 })();
 
 let feedingChains = (function(){
   const fc = [];
-  function idxOf(name){ const i = criticalTasks.findIndex(function(t){ return t.name===name; }); return i>=0 ? i : criticalTasks.length-1; }
-  function chain(names, durs, owners, mergeIntoName){
-    const subs = names.map(function(n,k){ const t = newTask(n, durs[k], 0); t.owner = owners[k]||'Civil Contractor'; return t; });
-    const top = newTask(names.length>1 ? names[0]+' …' : names[0], 0, 0);
-    top.subtasks = subs;
-    top.expanded = true;
-    // forward-scheduled: this feeding chain starts once its named merge-into task finishes (FS)
-    top.preds = (idxOf(mergeIntoName)+1)+'FS';
-    fc.push({mergeIndex: idxOf(mergeIntoName), tasks: [top]});
+  function chain(name, preds, buffer, owner, subs){
+    const top = newTask(name, 0, 0);
+    top.owner = owner; top.taskType = 'feeding'; top.preds = preds; top.buffer = buffer;
+    top.expanded = false; top.subtasks = subs.map(mkSub);
+    const m = parseInt(preds,10); fc.push({mergeIndex: (isNaN(m)?0:m-1), tasks:[top]});
   }
-  chain(['anti termite treatment','water tank development'], [1,5], ['Civil Contractor','Civil Contractor'], 'bitument coat');
-  chain(['material procurement'], [3], ['Civil Contractor'], 'shuttering making');
-  chain(
-    ['water ponding','brickwork layout','brickwork 9 inch','brickwork 4 inches','curing period','electrical conduit','core cutting for plumbing pipes','plumbing works','manhole development','connecting with sewer'],
-    [5,1,5,3,5,3,2,4,2,1],
-    ['Civil Contractor','Civil Contractor','Civil Contractor','Civil Contractor','Civil Contractor','Electrical Contractor','Plumbing Contractor','Plumbing Contractor','Civil Contractor','Civil Contractor'],
-    'internal plaster'
-  );
-  chain(
-    ['elecrical plaster','parapet brickwork','mumty development','machine room development','waterproofing','boundary wall developement','front steps development','front ramp development'],
-    [3,3,4,3,3,5,2,2],
-    ['Electrical Contractor','Civil Contractor','Civil Contractor','Civil Contractor','Civil Contractor','Civil Contractor','Civil Contractor','Civil Contractor'],
-    'Structure Work Complete'
-  );
+  chain("F1 · Statutory approvals & sanctions", "1SS", 10, "Process coordinator", [
+    ["Sanction drawing set & submission",6,180,"Architect","Liaison consultant",""],
+    ["Building plan sanction — follow-up & receipt",22,520,"Liaison consultant","Liaison consultant","GATE: excavation cannot legally start without this."],
+    ["Labour licence & statutory registrations",5,100,"Process coordinator","","Labour licence, EPF/ESI, insurance for workmen."],
+  ]);
+  chain("F2 · Temporary site services", "2SS", 5, "Site supervisor", [
+    ["Borewell / boring for construction water",4,160,"Boring contractor","Boring contractor",""],
+    ["Temporary electricity meter application",10,90,"Process coordinator","DISCOM","Long lead — apply the same week the site is barricaded."],
+    ["Meter release, site DB & cabling",5,130,"Electrical contractor","DISCOM","MATERIAL: site DB, armoured cable, ELCB, earthing kit."],
+  ]);
+  chain("F3 · Budgeting & procurement strategy", "1FS", 5, "Project manager", [
+    ["BOQ preparation from GFC drawings",6,60,"Quantity surveyor","",""],
+    ["Rate analysis & vendor shortlisting",6,40,"Project manager","",""],
+    ["Budget sign-off with client",3,0,"Project manager","","GATE: no work order goes out before the client signs the budget."],
+    ["Work order release to key vendors",3,50,"Process coordinator","","Steel, RMC, shuttering, lift, tiles — the long-lead five."],
+  ]);
+  chain("F4 · FULL KITTING — sub-structure material", "2SS", 6, "Project manager", [
+    ["Rate lock: steel, cement, aggregate",3,0,"Project manager","Steel vendor","Cost carried in phase 03."],
+    ["TMT steel order & delivery lead",10,0,"Process coordinator","Steel vendor","Cost carried in phase 03. Order against bar bending schedule, not lump sum."],
+    ["Cement, sand & aggregate first lot at site",5,0,"Site supervisor","Material vendor","Cost carried in phase 03."],
+    ["RMC / batching plant tie-up & trial mix",4,0,"Project manager","RMC supplier","FULL KIT GATE: this chain feeds the footing rebar & pour, not excavation. Everything must be on site before 'Raft / footing reinforcement' starts."],
+  ]);
+  chain("F5 · Lift package — long lead", "3SS", 35, "Project manager", [
+    ["Lift vendor finalisation & order",10,300,"Project manager","Lift vendor","Shaft GA drawing from vendor feeds the architectural GFC."],
+    ["Manufacturing lead time",75,1400,"Lift vendor","Lift vendor","LONGEST LEAD ITEM ON THE PROJECT — order before sub-structure finishes."],
+    ["Shaft readiness & plumb inspection",3,0,"Site supervisor","Lift vendor","GATE: shaft plumb, machine room ready, power available."],
+    ["Lift erection",20,800,"Lift vendor","Lift vendor",""],
+    ["Testing & inspector certification",8,300,"Lift vendor","Lift inspector","Statutory lift inspector certificate required for handover."],
+  ]);
+  chain("F6 · FULL KITTING — superstructure formwork & rebar", "2SS", 9, "Site supervisor", [
+    ["Shuttering system procurement (ply / aluform)",10,0,"Project manager","Shuttering vendor","Cost carried in the superstructure phases."],
+    ["Rebar bulk order & staged delivery schedule",14,0,"Process coordinator","Steel vendor","Stage deliveries floor by floor — avoid 5 floors of steel rusting on site."],
+    ["Scaffolding & props hire mobilisation",5,0,"Site supervisor","Scaffolding vendor","Props must cover 3 slabs simultaneously (21-day retention)."],
+  ]);
+  chain("F7 · MEP design & coordinated drawings", "1FS", 8, "Architect", [
+    ["Electrical load calculation & layout",8,110,"MEP consultant","MEP consultant",""],
+    ["Plumbing & drainage design",8,100,"MEP consultant","MEP consultant",""],
+    ["HVAC, DG & solar sizing",6,90,"MEP consultant","MEP consultant",""],
+    ["Coordinated services drawing sign-off",5,0,"Project manager","","GATE: no slab sleeve or conduit goes in without this drawing."],
+  ]);
+  chain("F8 · Elevation & façade package", "8FS", 27, "Architect", [
+    ["Elevation design freeze & material board",8,120,"Architect","",""],
+    ["Cladding vendor selection & mock-up approval",12,180,"Project manager","Façade vendor","Full-size mock-up panel on site, approved in daylight."],
+    ["Façade material order & delivery",25,900,"Process coordinator","Façade vendor","MATERIAL: stone / ACP / louvres — long delivery lead."],
+    ["Façade installation",30,1100,"Façade vendor","Façade vendor",""],
+    ["Structural glazing & railing",15,500,"Fabrication vendor","Fabrication vendor",""],
+  ]);
+  chain("F9 · FULL KITTING — tiles, marble & stone", "9FS", 15, "Project manager", [
+    ["Sample shortlisting with client",10,40,"Interior project manager","Tile vendor",""],
+    ["Client selection sign-off & quantity freeze",7,0,"Interior project manager","","GATE: freeze quantities with 7% wastage before ordering."],
+    ["Order placement & delivery",30,0,"Process coordinator","Marble vendor","Cost carried in phase 12. Single-batch order to avoid shade variation."],
+    ["Site receipt, tally & stacking",3,40,"Site supervisor","","FULL KIT GATE: tiling does not start until the tally sheet is complete."],
+  ]);
+  chain("F10 · Modular & joinery manufacturing", "11FS", 20, "Interior project manager", [
+    ["Site measurement after plaster",5,30,"Modular vendor","Modular vendor","Measure only after plaster — pre-plaster measurements cause rework."],
+    ["Design & production drawings",12,120,"Interior designer","",""],
+    ["Client approval — finishes, laminates, hardware",8,0,"Interior project manager","","GATE: signed sample board before the factory cuts anything."],
+    ["Factory manufacturing",35,0,"Modular vendor","Modular vendor","Cost carried in phase 15."],
+    ["Delivery to site",5,60,"Modular vendor","Modular vendor",""],
+  ]);
+  chain("F11 · FULL KITTING — doors, windows & hardware", "10FS", 14, "Process coordinator", [
+    ["Door & window schedule freeze",5,30,"Architect","",""],
+    ["Vendor order — flush, wooden, UPVC / aluminium",6,0,"Process coordinator","Joinery vendor","Cost carried in phases 09 and 13."],
+    ["Manufacturing",30,0,"Joinery vendor","Joinery vendor",""],
+    ["Delivery & site storage",4,50,"Site supervisor","","Store flat and dry — warped shutters are unusable."],
+  ]);
+  chain("F12 · FULL KITTING — sanitaryware, CP & electrical fixtures", "10FS", 12, "Interior project manager", [
+    ["Selection with client — sanitary, CP, fixtures",8,40,"Interior project manager","Sanitary vendor",""],
+    ["Order placement against approved BOQ",4,0,"Process coordinator","Sanitary vendor","Cost carried in phase 13."],
+    ["Delivery lead",25,0,"Sanitary vendor","Sanitary vendor",""],
+    ["Receipt, tally & secure storage",3,40,"Site supervisor","","FULL KIT GATE: lockable store — highest theft-risk material on site."],
+  ]);
+  chain("F13 · External development & landscaping", "12FS", 14, "Site supervisor", [
+    ["Boundary wall, main gate & wicket gate",15,720,"Civil contractor","Fabrication vendor","MATERIAL: main gate fabrication is a 25-day lead — order at phase 12 start."],
+    ["Driveway, paving & ramp",10,480,"Civil contractor","Paving vendor",""],
+    ["External drainage & rainwater harvesting",8,380,"Plumbing contractor","","Check RWA / municipal rainwater harvesting requirement."],
+    ["Landscaping, soil & planting",10,420,"Landscape vendor","Landscape vendor",""],
+    ["External & façade lighting",5,200,"Electrical contractor","",""],
+  ]);
+  chain("F14 · Permanent connections & statutory clearances", "9FS", 22, "Process coordinator", [
+    ["Permanent electricity connection application",10,90,"Process coordinator","DISCOM",""],
+    ["Sanctioned load release & meter installation",30,520,"DISCOM","DISCOM","Long lead. Apply during blockwork, not at the end."],
+    ["Water & sewer connection",15,180,"Process coordinator","Water board",""],
+    ["Fire NOC / completion certificate application",20,110,"Liaison consultant","Liaison consultant","GATE: needed for legal handover and occupancy."],
+  ]);
+  chain("F15 · Solar, DG, water systems & smart home", "12FS", 20, "Project manager", [
+    ["Solar rooftop design & order",12,620,"MEP consultant","Solar vendor",""],
+    ["DG set order & delivery",20,580,"Process coordinator","DG vendor","MATERIAL: acoustic enclosure + AMR panel; 30-day lead is common."],
+    ["STP, softener, pumps & pump room",12,380,"Plumbing contractor","Water systems vendor",""],
+    ["CCTV, networking & home automation",10,340,"Electrical contractor","Automation vendor","Conduit and cable must go in at phase 10 — cannot be retrofitted cleanly."],
+    ["Installation, commissioning & training",12,180,"Project manager","","Client team trained on every system before handover."],
+  ]);
   return fc;
 })();
-let vendorPayments = [];
+
+let vendorPayments = [
+  {vendor:"Geotech lab", wo:"WO-001", desc:"Soil investigation report — on submission", schedDate:"2026-08-10", schedAmt:85, actDate:"", actAmt:'', notes:""},
+  {vendor:"Barricading contractor", wo:"WO-002", desc:"Barricading + labour camp — on completion", schedDate:"2026-08-25", schedAmt:240, actDate:"", actAmt:'', notes:""},
+  {vendor:"Liaison consultant", wo:"WO-003", desc:"Building plan sanction — 50% on submission", schedDate:"2026-08-20", schedAmt:350, actDate:"", actAmt:'', notes:""},
+  {vendor:"Liaison consultant", wo:"WO-003", desc:"Building plan sanction — 50% on receipt", schedDate:"2026-09-20", schedAmt:350, actDate:"", actAmt:'', notes:""},
+  {vendor:"Excavation contractor", wo:"WO-004", desc:"Excavation — on measurement", schedDate:"2026-10-20", schedAmt:620, actDate:"", actAmt:'', notes:""},
+  {vendor:"Steel vendor", wo:"WO-005", desc:"TMT for sub-structure — advance against PO", schedDate:"2026-10-05", schedAmt:900, actDate:"", actAmt:'', notes:"Long lead — release advance early."},
+  {vendor:"RMC supplier", wo:"WO-006", desc:"Footing pour — against delivery challans", schedDate:"2026-11-05", schedAmt:1650, actDate:"", actAmt:'', notes:""},
+  {vendor:"Lift vendor", wo:"WO-007", desc:"Lift order — 30% advance", schedDate:"2026-10-15", schedAmt:840, actDate:"", actAmt:'', notes:"Longest lead item; advance releases the manufacturing slot."},
+  {vendor:"Lift vendor", wo:"WO-007", desc:"Lift — 50% before dispatch", schedDate:"2027-01-20", schedAmt:1400, actDate:"", actAmt:'', notes:""},
+  {vendor:"Lift vendor", wo:"WO-007", desc:"Lift — 20% on commissioning", schedDate:"2027-04-20", schedAmt:560, actDate:"", actAmt:'', notes:""},
+  {vendor:"Shuttering vendor", wo:"WO-008", desc:"Formwork system — hire deposit", schedDate:"2026-11-15", schedAmt:450, actDate:"", actAmt:'', notes:""},
+  {vendor:"Marble vendor", wo:"WO-009", desc:"Stone & tiles — 50% advance", schedDate:"2027-08-15", schedAmt:1200, actDate:"", actAmt:'', notes:""},
+  {vendor:"Façade vendor", wo:"WO-010", desc:"Façade material — 40% advance", schedDate:"2027-07-10", schedAmt:700, actDate:"", actAmt:'', notes:""},
+  {vendor:"Modular vendor", wo:"WO-011", desc:"Modular kitchen & wardrobes — 50% advance", schedDate:"2027-11-10", schedAmt:1350, actDate:"", actAmt:'', notes:""},
+  {vendor:"Joinery vendor", wo:"WO-012", desc:"Doors, shutters & hardware — 50% advance", schedDate:"2027-09-15", schedAmt:600, actDate:"", actAmt:'', notes:""},
+  {vendor:"Sanitary vendor", wo:"WO-013", desc:"Sanitaryware & CP — 60% advance", schedDate:"2027-09-20", schedAmt:600, actDate:"", actAmt:'', notes:""},
+  {vendor:"DG vendor", wo:"WO-014", desc:"DG set — 40% advance", schedDate:"2028-02-15", schedAmt:240, actDate:"", actAmt:'', notes:""},
+  {vendor:"Solar vendor", wo:"WO-015", desc:"Rooftop solar — 40% advance", schedDate:"2028-02-20", schedAmt:250, actDate:"", actAmt:'', notes:""},
+  {vendor:"CLIENT MILESTONE", wo:"—", desc:"Booking / mobilisation advance", schedDate:"2026-08-01", schedAmt:5000, actDate:"", actAmt:'', notes:"Money in, not out."},
+  {vendor:"CLIENT MILESTONE", wo:"—", desc:"On completion of sub-structure", schedDate:"2026-11-25", schedAmt:8000, actDate:"", actAmt:'', notes:""},
+  {vendor:"CLIENT MILESTONE", wo:"—", desc:"On completion of 2nd-floor slab", schedDate:"2027-03-10", schedAmt:9000, actDate:"", actAmt:'', notes:""},
+  {vendor:"CLIENT MILESTONE", wo:"—", desc:"On completion of terrace slab & mumty", schedDate:"2027-06-20", schedAmt:10000, actDate:"", actAmt:'', notes:""},
+  {vendor:"CLIENT MILESTONE", wo:"—", desc:"On completion of plaster & waterproofing", schedDate:"2027-10-25", schedAmt:9000, actDate:"", actAmt:'', notes:""},
+  {vendor:"CLIENT MILESTONE", wo:"—", desc:"On completion of flooring & second fix", schedDate:"2028-02-10", schedAmt:9000, actDate:"", actAmt:'', notes:""},
+  {vendor:"CLIENT MILESTONE", wo:"—", desc:"On handover", schedDate:"2028-06-15", schedAmt:9200, actDate:"", actAmt:'', notes:"Release against signed handover note."},
+];
 const origState = JSON.stringify({meta, lookahead, daily, readiness_, zoomPct, criticalTasks, feedingChains, vendorPayments, syncUrl, autoSync});
 
 function fmt(n){ return Math.round(n*10)/10; }
@@ -657,7 +842,7 @@ function schedule(){
   }
   for(let idx=0; idx<n; idx++) computeOne(idx);
   const chainSum = Math.max(0, ...criticalTasks.map(t=>t.end));
-  const completionBuffer = chainSum*0.5;
+  const completionBuffer = chainSum*0.3; // conservative 30% pooled safety (client preference)
   const total = chainSum + completionBuffer;
   return {chainSum, completionBuffer, total};
 }
@@ -1254,7 +1439,7 @@ function renderLookahead(){
   // marked done — dimmed when no link has been set yet for that category.
   const clcell = (t,path) => {
     const mk = (field, icon, label, ready) => `<button class="iconbtn" onclick="openLink(${path},'${field}')" title="${t[field] ? label+': '+t[field] : 'No '+label.toLowerCase()+' link set (add one in the Readiness tab)'}" style="${t[field] ? '' : 'opacity:0.3;'} ${ready?'border-color:var(--green);':''}"><i class="ti ti-${icon}" style="font-size:11px;"></i></button>`;
-    return `<div style="display:flex; gap:3px;">${mk('infoLink','info-circle','Information',t.infoReady)}${mk('materialLink','package','Material',t.materialReady)}${mk('labourLink','users','Labour',t.labourReady)}</div>`;
+    return `<div style="display:flex; gap:3px;">${mk('infoLink','file-text','Drawings',t.infoReady)}${mk('materialLink','package','Material (MR)',t.materialReady)}${mk('labourLink','users','Labour (contractor form)',t.labourReady)}</div>`;
   };
   let html = '';
   rows.forEach(({t, kind, i, si, type, color, overdue}) => {
@@ -1280,7 +1465,7 @@ function renderLookahead(){
 function copyLookahead(){
   const {rows, from, winEnd} = lookaheadRows();
   const today = new Date(); today.setHours(0,0,0,0);
-  let txt = `${meta.name||'Project'} — 3-day look-ahead (${fmtD(from)} to ${fmtD(winEnd)})\n\n`;
+  let txt = `${meta.name||'Project'} — 3 days planning (${fmtD(from)} to ${fmtD(winEnd)})\n\n`;
   if(!rows.length){ txt += 'No tasks fall in this window.'; }
   rows.forEach(({t, overdue}) => {
     const s = taskStatus(t, from, winEnd, today);
@@ -1404,13 +1589,23 @@ function readinessStatus(t, psD, today){
 function rdCheck(checked, path, field){
   return `<input type="checkbox" ${checked?'checked':''} onchange="${path}.${field}=this.checked; update();" style="width:16px; height:16px; cursor:pointer;">`;
 }
-// pairs a readiness checkbox with a checklist/FMS link — the link is what has to be opened and
-// worked through before that box gets ticked (e.g. a material checklist, a labour FMS).
+// the three readiness gates, each with its own placeholder and tick-tooltip — the labels the site
+// team actually uses: Drawings (GFC / shop drawing issued), Material (MR raised, approved and
+// received) and Labour (contractor confirms manpower is available and flags any issue, via a
+// Google Form the FMS runs off).
+const RD_META = {
+  infoLink:     {ph:'Drawing / GFC link',        tip:'Tick once the GFC / shop drawing for this task is issued, current revision, and on site'},
+  materialLink: {ph:'MR link',                   tip:'Paste the material request (MR) link. Tick only once the MR is raised, approved and the material is received and tallied at site'},
+  labourLink:   {ph:'Labour Google Form / FMS',  tip:'PC asks the labour contractor: is manpower for this specific work available, and is he facing any issue? Paste the Google Form link the contractor fills — the FMS runs off its responses. Tick only on a confirmed "available, no issues"'}
+};
+// pairs a readiness checkbox with its link — the link is what has to be opened and worked through
+// before that box gets ticked.
 function rdLinkCell(t, path, linkField, checkField){
   const val = t[linkField] || '';
+  const m = RD_META[linkField] || {ph:'Checklist / FMS link', tip:'Mark ready'};
   return `<div style="display:flex; align-items:center; gap:4px;">
-    <input type="checkbox" ${t[checkField]?'checked':''} onchange="${path}.${checkField}=this.checked; update();" title="Mark ready" style="width:15px; height:15px; cursor:pointer; flex-shrink:0;">
-    <input type="text" value="${String(val).replace(/"/g,'&quot;')}" oninput="${path}.${linkField}=this.value; scheduleAutoSync();" placeholder="Checklist / FMS link" style="width:110px; font-size:10px; height:22px;">
+    <input type="checkbox" ${t[checkField]?'checked':''} onchange="${path}.${checkField}=this.checked; update();" title="${m.tip}" style="width:15px; height:15px; cursor:pointer; flex-shrink:0;">
+    <input type="text" value="${String(val).replace(/"/g,'&quot;')}" oninput="${path}.${linkField}=this.value; scheduleAutoSync();" placeholder="${m.ph}" title="${m.tip}" style="width:118px; font-size:10px; height:22px;">
     <button class="iconbtn" onclick="openLink(${path},'${linkField}')" title="${val ? 'Open: '+val : 'No link set'}" style="${val ? '' : 'opacity:0.35;'}"><i class="ti ti-external-link" style="font-size:11px;"></i></button>
   </div>`;
 }
@@ -1441,7 +1636,7 @@ function renderReadiness(){
   const banner = document.getElementById('rd-banner');
   if(banner){
     if(rows.length===0){ banner.textContent=''; }
-    else if(atRisk>0){ banner.textContent = `⚠ ${atRisk} task(s) starting within 2 days are not fully ready — do not start until Information, Material & Labour are all confirmed.`; banner.style.color='var(--red)'; }
+    else if(atRisk>0){ banner.textContent = `⚠ ${atRisk} task(s) starting within 2 days are not fully ready — do not start until Drawings, Material (MR) & Labour are all confirmed.`; banner.style.color='var(--red)'; }
     else { banner.textContent = `All ${rows.length} upcoming task(s) are on track for readiness.`; banner.style.color='var(--green)'; }
   }
 }
@@ -1800,7 +1995,7 @@ function renderCostWidget(){
   }
   return bar('Planned', m.planTot, 'var(--today)') + bar('Actual', m.actTot, m.actTot>m.planTot?'var(--red)':'var(--green)');
 }
-// stacked bar per person (from the Owner field, filled in on the 3-day look-ahead / Daily
+// stacked bar per person (from the Owner field, filled in on the 3 days planning / Daily
 // follow-up tabs) — done/remaining/overdue leaf-task counts, capped to the 8 busiest people.
 function renderWorkloadWidget(){
   const leaves = allLeafTasks();
@@ -1817,7 +2012,7 @@ function renderWorkloadWidget(){
     .map(([name,c]) => ({name, ...c, total:c.done+c.remaining+c.overdue}))
     .sort((a,b)=>b.total-a.total)
     .slice(0,8);
-  if(!entries.length) return `<p style="font-size:12px; color:var(--text-muted);">No tasks assigned yet — add an owner in the 3-day look-ahead or Daily follow-up tab.</p>`;
+  if(!entries.length) return `<p style="font-size:12px; color:var(--text-muted);">No tasks assigned yet — add an owner in the 3 days planning or Daily follow-up tab.</p>`;
   const maxV = Math.max(1, ...entries.map(e=>e.total));
   const bars = entries.map(e => `
     <div style="display:flex; align-items:center; gap:8px; margin-bottom:7px;">
@@ -2453,7 +2648,7 @@ function buildSyncPayload(){
     workload
   };
   const statusLabel = {done:'Done', progress:'In progress', overdue:'Overdue', notstarted:'Not started'};
-  // mirrors the "3-day look-ahead" tab — same lookaheadRows() the UI itself renders from.
+  // mirrors the "3 days planning" tab — same lookaheadRows() the UI itself renders from.
   const lookaheadList = lookaheadRows().rows.map(r => ({
     num: taskNumber(r.kind, r.i, r.si), name: r.t.name, type: r.type,
     startDate: fmtISO(dateAt(r.t.start)), endDate: fmtISO(dateAt(r.t.end)),
