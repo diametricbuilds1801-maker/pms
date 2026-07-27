@@ -1,0 +1,2842 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DB Planning Project — Diametric Builds</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/tabler-icons/2.44.0/iconfont/tabler-icons.min.css">
+<style>
+  :root {
+    --surface-2: #ffffff; --surface-1: #f4f3f0; --surface-0: #fafaf8;
+    --text-primary: #0b0b0b; --text-secondary: #52514e; --text-muted: #898781;
+    --border: rgba(11,11,11,0.10); --border-strong: rgba(11,11,11,0.20);
+    --red: #a32d2d; --green: #3b6d11; --amber: #BA7517; --today: #1D6FB8; --delayed: #E0AE1A;
+    --navy: #16222e; --gold: #b08d3e;
+    --radius: 8px;
+    --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --surface-2: #232322; --surface-1: #1a1a19; --surface-0: #141413;
+      --text-primary: #ffffff; --text-secondary: #c3c2b7; --text-muted: #898781;
+      --border: rgba(255,255,255,0.10); --border-strong: rgba(255,255,255,0.20);
+      --red: #f09595; --green: #c0dd97; --today: #7EB6ED; --navy: #1a2634; --delayed: #F2CB4E;
+    }
+  }
+  /* manual theme override (button, top-left) — takes priority over the OS-level media query
+     above because a class selector on :root is more specific than the bare :root it's wrapped in. */
+  :root.theme-dark {
+    --surface-2: #232322; --surface-1: #1a1a19; --surface-0: #141413;
+    --text-primary: #ffffff; --text-secondary: #c3c2b7; --text-muted: #898781;
+    --border: rgba(255,255,255,0.10); --border-strong: rgba(255,255,255,0.20);
+    --red: #f09595; --green: #c0dd97; --today: #7EB6ED; --navy: #1a2634; --delayed: #F2CB4E;
+  }
+  :root.theme-light {
+    --surface-2: #ffffff; --surface-1: #f4f3f0; --surface-0: #fafaf8;
+    --text-primary: #0b0b0b; --text-secondary: #52514e; --text-muted: #898781;
+    --border: rgba(11,11,11,0.10); --border-strong: rgba(11,11,11,0.20);
+    --red: #a32d2d; --green: #3b6d11; --today: #1D6FB8; --navy: #16222e; --delayed: #E0AE1A;
+  }
+  * { box-sizing: border-box; }
+  body { font-family: var(--font-sans); background: var(--surface-0); color: var(--text-primary); margin: 0; padding: 1.5rem; line-height: 1.5; }
+  .wrap { max-width: 1320px; margin: 0 auto; }
+  h1 { font-size: 20px; font-weight: 600; margin: 0; }
+  input, select, button { font-family: var(--font-sans); border: 0.5px solid var(--border-strong); border-radius: var(--radius); background: var(--surface-2); color: var(--text-primary); }
+  input, select { padding: 2px 6px; }
+  button { cursor: pointer; background: transparent; }
+  button:hover { background: var(--surface-1); }
+  button:active { transform: scale(0.98); }
+  button:disabled { opacity: 0.35; cursor: not-allowed; }
+  button:disabled:hover { background: transparent; }
+  .tabbtn { font-size: 12.5px; padding: 8px 13px; border-radius: 8px 8px 0 0; border-bottom: none; }
+  .tabbtn.active { background: var(--surface-2); font-weight: 600; border-bottom: 2px solid var(--gold); }
+  .card { background: var(--surface-1); border-radius: var(--radius); padding: 0.8rem 1rem; }
+  .card p.lab { font-size: 12px; color: var(--text-secondary); margin: 0 0 2px; }
+  .card p.val { font-size: 20px; font-weight: 600; margin: 0; }
+  th { font-size: 10.5px; color: var(--text-muted); font-weight: 600; text-align: right; padding: 4px 6px; border-bottom: 1px solid var(--border-strong); }
+  td { font-size: 12px; padding: 3px 6px; border-bottom: 0.5px solid var(--border); text-align: right; white-space: nowrap; }
+  th.l, td.l { text-align: left; }
+  .gscroll { overflow-x: auto; border: 0.5px solid var(--border); border-radius: 8px; padding-bottom: 4px; }
+  .grow { display: flex; align-items: center; height: 32px; }
+  .grow.sub { height: 27px; }
+  .gsticky-l { position: sticky; left: 0; z-index: 3; background: var(--surface-2); display: flex; align-items: center; gap: 4px; width: 320px; flex-shrink: 0; padding: 0 4px; box-shadow: 2px 0 4px rgba(0,0,0,0.05); }
+  .gsticky-r { position: sticky; right: 0; z-index: 3; background: var(--surface-2); display: flex; align-items: center; gap: 3px; width: 260px; flex-shrink: 0; justify-content: flex-end; padding: 0 4px; box-shadow: -2px 0 4px rgba(0,0,0,0.05); }
+  .progress-fill { position: absolute; top: 0; bottom: 0; left: 0; pointer-events: none; }
+  .bar-label { position: absolute; top: 50%; transform: translateY(-50%); font-size: 6.8px; font-weight: 600; color: var(--text-primary); background: var(--surface-2); border: 1px solid #4FA6E0; border-radius: 3px; padding: 1px 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.3); white-space: nowrap; pointer-events: none; z-index: 5; margin-left: 5px; line-height: 1.5; }
+  .bar-label.sub { font-size: 6.2px; padding: 0px 3px; }
+  /* flipped label — used when the default (right-of-bar) position would run into the sticky-right
+     column; anchors the label's right edge to the bar's START instead, so it sits before the bar. */
+  .bar-label.flip { margin-left: 0; margin-right: 5px; }
+  .gtrack { position: relative; border-radius: 4px; background: var(--surface-1); flex-shrink: 0; margin: 0 6px; }
+  .resize-handle { position: absolute; top: 0; bottom: 0; right: 0; width: 7px; cursor: ew-resize; border-radius: 0 4px 4px 0; touch-action: none; }
+  .resize-handle:hover, .resize-handle:active { background: rgba(0,0,0,0.22); }
+  .stat-card { background: var(--surface-1); border-radius: var(--radius); padding: 10px 12px; }
+  .chev { width: 14px; text-align: center; font-size: 10px; color: var(--text-muted); cursor: pointer; flex-shrink: 0; user-select: none; }
+  .phase-badge { font-size: 8.5px; font-weight: 700; color: var(--gold); background: rgba(176,141,62,0.16); padding: 1px 4px; border-radius: 4px; white-space: nowrap; flex-shrink: 0; }
+  #list-table.budget-hidden .col-budget { display: none !important; }
+  .iconbtn { width: 22px; height: 22px; padding: 0; flex-shrink: 0; background: #F9D3E4; border: 1px solid #E896BC; }
+  .iconbtn:hover { background: #F3B0D0; }
+  .iconbtn i { font-size: 12px; color: #8A2955; }
+  .todayline { position: absolute; top: -6px; bottom: -6px; width: 2px; background: var(--today); z-index: 6; pointer-events: none; }
+  /* phase/summary bars (a top-level task rolled up from its sub-tasks) are clipped into an
+     arrow shape — a flat left edge and a pointed right tip — so they read as a rollup header,
+     distinct from the plain rectangular task bars underneath. Fixed-px tip via calc() keeps the
+     point crisp at any bar width/zoom level instead of stretching with the bar. */
+  .bar-phase {
+    clip-path: polygon(0 0, calc(100% - 9px) 0, 100% 50%, calc(100% - 9px) 100%, 0 100%);
+    box-shadow: 0 1px 2px rgba(0,0,0,0.3);
+  }
+  .badge-pc { font-size: 9px; font-weight: 700; color: var(--red); background: rgba(163,45,45,0.12); padding: 1px 5px; border-radius: 4px; margin-left: 4px; white-space: nowrap; }
+  .shift-head { font-size: 13px; font-weight: 600; color: var(--gold); margin: 14px 0 6px; }
+  #btn-bw.active { background: var(--gold); color: #fff; border-color: var(--gold); }
+  .print-heading { display: none; }
+  @media print {
+    .no-print, .iconbtn, .chev, .resize-handle, .drag-handle { display: none !important; }
+    .print-heading { display: block; font-size: 15px; font-weight: 700; color: var(--gold); margin: 18px 0 6px; padding-top: 10px; border-top: 1px solid var(--border-strong); }
+    .print-heading:first-of-type { border-top: none; padding-top: 0; margin-top: 0; }
+    .gsticky-l, .gsticky-r { position: static !important; box-shadow: none !important; width: auto !important; }
+    #tab-gantt, #tab-list, #tab-vendors { overflow-x: visible !important; }
+    body { padding: 0.5rem; }
+    body.printing #tab-summary, body.printing #tab-gantt, body.printing #tab-list,
+    body.printing #tab-lookahead, body.printing #tab-daily, body.printing #tab-vendors { display: block !important; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap" id="wrap">
+
+  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px; flex-wrap:wrap; gap:8px;">
+    <div style="display:flex; align-items:flex-start; gap:10px;">
+      <button id="btn-bw" onclick="toggleGrayscale()" class="no-print" title="Toggle black &amp; white view (useful for printing or low-colour displays)" style="font-size:11px; padding:5px 9px; margin-top:1px; flex-shrink:0;"><i class="ti ti-contrast-2" style="font-size:14px;"></i></button>
+      <button id="btn-theme" onclick="toggleTheme()" class="no-print" title="Switch between dark and light theme" style="font-size:11px; padding:5px 9px; margin-top:1px; flex-shrink:0;"><i class="ti ti-moon" style="font-size:14px;"></i></button>
+      <div>
+        <div style="font-size:11px; font-weight:700; color:var(--gold); letter-spacing:1px;">DIAMETRIC BUILDS <span style="font-weight:400; color:var(--text-muted); letter-spacing:0;">· build 2026-07-27-safetynet</span></div>
+        <h1>DB Planning Project — critical chain planner &amp; tracker</h1>
+        <div style="font-size:11.5px; color:var(--text-secondary); margin-top:2px;">Currently editing: <span id="active-project-badge" style="font-weight:600; color:var(--gold);"></span></div>
+      </div>
+    </div>
+    <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;" class="no-print">
+      <button onclick="exportJSON()" style="font-size:12px; padding:6px 12px;"><i class="ti ti-download" style="font-size:14px; vertical-align:-2px; margin-right:4px;"></i>Save data</button>
+      <button onclick="document.getElementById('importfile').click()" style="font-size:12px; padding:6px 12px;"><i class="ti ti-upload" style="font-size:14px; vertical-align:-2px; margin-right:4px;"></i>Load data</button>
+      <input type="file" id="importfile" accept=".json" style="display:none;" onchange="importJSON(event)">
+      <button id="btn-undo" onclick="undo()" title="Undo (Ctrl+Z)" style="font-size:12px; padding:6px 12px;"><i class="ti ti-arrow-back-up" style="font-size:14px; vertical-align:-2px; margin-right:4px;"></i>Undo</button>
+      <button id="btn-redo" onclick="redo()" title="Redo (Ctrl+Y)" style="font-size:12px; padding:6px 12px;"><i class="ti ti-arrow-forward-up" style="font-size:14px; vertical-align:-2px; margin-right:4px;"></i>Redo</button>
+      <button onclick="resetAll()" style="font-size:12px; padding:6px 12px;" title="Restore this file's original sample data"><i class="ti ti-refresh" style="font-size:14px; vertical-align:-2px; margin-right:4px;"></i>Reset</button>
+      <button onclick="newProject()" style="font-size:12px; padding:6px 12px;" title="Clear everything to start a brand new project in this same file"><i class="ti ti-file-plus" style="font-size:14px; vertical-align:-2px; margin-right:4px;"></i>New project</button>
+      <span style="width:0.5px; height:22px; background:var(--border-strong); margin:0 2px;"></span>
+      <div style="display:flex; align-items:center; gap:4px;" title="Quality assurance checklist — not a schedule task, just a reference link">
+        <input type="text" id="qa-link" value="" placeholder="QA checklist link" oninput="meta.qaLink=this.value; scheduleAutoSync();" style="width:150px; font-size:12px; height:30px;">
+        <button class="iconbtn" onclick="openQaLink()" title="Open QA checklist" style="width:30px; height:30px;"><i class="ti ti-clipboard-check" style="font-size:14px;"></i></button>
+      </div>
+      <button onclick="printPDF()" style="font-size:12px; padding:6px 12px;" title="Print this planner, or choose 'Save as PDF' in the print dialog"><i class="ti ti-printer" style="font-size:14px; vertical-align:-2px; margin-right:4px;"></i>Print / PDF</button>
+    </div>
+  </div>
+
+  <div id="metrics" style="display:grid; grid-template-columns:repeat(5,1fr); gap:10px; margin:12px 0 16px;"></div>
+
+  <div class="no-print" style="display:flex; gap:4px; border-bottom:1px solid var(--border-strong); flex-wrap:wrap;">
+    <button class="tabbtn active" id="tb-summary" onclick="showTab('summary')">Summary</button>
+    <button class="tabbtn" id="tb-gantt" onclick="showTab('gantt')">Gantt chart</button>
+    <button class="tabbtn" id="tb-list" onclick="showTab('list')">Task list</button>
+    <button class="tabbtn" id="tb-lookahead" onclick="showTab('lookahead')">3 days planning</button>
+    <button class="tabbtn" id="tb-daily" onclick="showTab('daily')">Daily follow-up</button>
+    <button class="tabbtn" id="tb-vendors" onclick="showTab('vendors')">Material &amp; Resource</button>
+  </div>
+
+  <h2 class="print-heading">Summary</h2>
+  <div id="tab-summary" style="background:var(--surface-2); border:0.5px solid var(--border); border-top:none; border-radius:0 0 8px 8px; padding:1.2rem;">
+    <div>
+      <p style="font-size:13px; font-weight:600; color:var(--gold); margin:0 0 8px;">Project details</p>
+      <div style="display:grid; grid-template-columns:150px 1fr 150px 1fr; gap:8px 16px; align-items:center; font-size:13px; max-width:900px;">
+        <label>Project name</label><input type="text" id="m-name" oninput="meta.name=this.value; update();" style="height:28px;">
+        <label>Client</label><input type="text" id="m-client" oninput="meta.client=this.value; scheduleAutoSync();" style="height:28px;">
+        <label>Location</label><input type="text" id="m-location" oninput="meta.location=this.value; scheduleAutoSync();" style="height:28px;">
+        <label>Project start date</label><input type="date" id="m-start" onchange="meta.start=this.value; update();" style="height:28px;">
+        <label style="font-weight:600;">Promised delivery date</label><input type="date" id="m-delivery-date" onchange="meta.deliveryDate=this.value; update();" style="height:28px;">
+        <label>Calculated completion</label><div id="m-delivery" style="font-weight:600; color:var(--gold);"></div>
+        <span></span><span id="m-delivery-variance" style="font-size:11.5px; font-weight:600;"></span>
+      </div>
+    </div>
+
+    <p style="font-size:13px; font-weight:600; color:var(--gold); margin:20px 0 8px; border-top:0.5px solid var(--border); padding-top:14px;">Saved on this device</p>
+    <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; font-size:12px;">
+      <span id="local-save-status" style="font-size:11.5px; color:var(--green); font-weight:600;"></span>
+    </div>
+    <p style="font-size:11px; color:var(--text-secondary); margin:4px 0 0; max-width:900px;">Every change is saved straight into this browser, instantly — this is what keeps your data from disappearing on reload, even with no internet or if Google Sheet sync below is having trouble. It's specific to this browser/device, so the Google Sheet sync below is what shares it elsewhere.</p>
+
+    <p style="font-size:13px; font-weight:600; color:var(--gold); margin:20px 0 8px; border-top:0.5px solid var(--border); padding-top:14px;">Google Sheet sync</p>
+    <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; font-size:12px; max-width:900px;">
+      <input type="text" id="sync-url" placeholder="Paste Apps Script Web App URL (from the bundled Code.gs deployment)" oninput="syncUrl=this.value;" onchange="onSyncUrlSet();" style="flex:1; min-width:280px; height:28px; font-size:11.5px;">
+      <button id="sync-btn" onclick="syncToSheet(true)" style="font-size:12px; padding:6px 12px;" title="Create the Google Sheet for this project and push current data to it"><i class="ti ti-cloud-upload" style="font-size:14px; vertical-align:-2px; margin-right:4px;"></i>Create project</button>
+      <button onclick="reloadFromSheet()" style="font-size:12px; padding:6px 12px;" title="Pull this project's latest saved data back from the Sheet — replaces what's on screen, so use this only if the Sheet has newer data than what's here"><i class="ti ti-cloud-download" style="font-size:14px; vertical-align:-2px; margin-right:4px;"></i>Reload from Sheet</button>
+      <label id="sync-auto-label" style="display:flex; align-items:center; gap:5px; font-size:11.5px; color:var(--text-secondary);" title="Only takes effect once the project has been created (button on the left)">
+        <input type="checkbox" id="sync-auto" onchange="autoSync=this.checked; if(autoSync && projectExists) syncToSheet(false);" style="width:auto; height:auto;">
+        Auto-sync on every change
+      </label>
+      <span id="sync-status" style="font-size:11px; color:var(--text-secondary);"></span>
+    </div>
+    <p style="font-size:11px; color:var(--text-secondary); margin:6px 0 0; max-width:900px;">One-time setup: paste <code>Code.gs</code> as a standalone Apps Script project, run <code>authorize()</code> once, deploy as a Web App ("Anyone" access), and paste the deployment URL above. Nothing is created on the Sheet until you click "Create project" — after that, "Auto-sync" (if ticked) pushes shortly after every change, plus every 10 seconds on its own regardless, so anything not yet synced always catches up on its own within a few seconds — no need to re-edit a field to get it to save. The same button turns into "Sync now" for an immediate manual push. This way, typing a placeholder name or just trying the tool out doesn't spawn a real Google Sheet by itself. This tool no longer auto-loads from the Sheet on its own (that used to risk overwriting newer edits sitting only in this browser) — use "Reload from Sheet" above whenever you deliberately want the Sheet's copy instead. This same URL works for every project — each gets its own Sheet, auto-created inside a fixed Drive folder and auto-shared as "anyone with the link can view." After a sync, the link appears next to the status below.</p>
+
+    <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-top:10px; font-size:12px;">
+      <label style="color:var(--text-secondary);">Switch project</label>
+      <select id="project-list" onchange="onProjectPicked(this.value)" style="min-width:220px; height:28px; font-size:11.5px;"><option value="">— choose a synced project —</option></select>
+      <button class="iconbtn" onclick="refreshProjectList()" title="Refresh the list of projects" style="width:28px; height:28px;"><i class="ti ti-refresh" style="font-size:14px;"></i></button>
+      <span id="project-list-status" style="font-size:11px; color:var(--text-secondary);"></span>
+    </div>
+    <p style="font-size:11px; color:var(--text-secondary); margin:4px 0 0; max-width:900px;">Lists every project that has synced at least once to this Drive folder. Picking one loads its saved data into this tool for editing — your current unsaved edits here are replaced (use "Save data" first if you want a backup).</p>
+
+    <p style="font-size:13px; font-weight:600; color:var(--gold); margin:20px 0 8px; border-top:0.5px solid var(--border); padding-top:14px;">Project team</p>
+    <table style="border-collapse:collapse; width:100%; max-width:700px;">
+      <thead><tr><th class="l">Role</th><th class="l">Name</th><th class="l">Phone</th></tr></thead>
+      <tbody id="team-rows"></tbody>
+    </table>
+
+    <p style="font-size:13px; font-weight:600; color:var(--gold); margin:20px 0 8px; border-top:0.5px solid var(--border); padding-top:14px;">Dashboard</p>
+    <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:16px;">
+      <div class="stat-card">
+        <p style="font-size:12px; color:var(--text-secondary); margin:0 0 10px; font-weight:600;">Health</p>
+        <div id="stat-health"></div>
+      </div>
+      <div class="stat-card">
+        <p style="font-size:12px; color:var(--text-secondary); margin:0 0 10px; font-weight:600;">Tasks</p>
+        <div id="stat-donut"></div>
+      </div>
+      <div class="stat-card">
+        <p style="font-size:12px; color:var(--text-secondary); margin:0 0 10px; font-weight:600;">Progress by phase</p>
+        <div id="stat-progress"></div>
+      </div>
+      <div class="stat-card">
+        <p style="font-size:12px; color:var(--text-secondary); margin:0 0 10px; font-weight:600;">Time</p>
+        <div id="stat-time"></div>
+      </div>
+      <div class="stat-card">
+        <p style="font-size:12px; color:var(--text-secondary); margin:0 0 10px; font-weight:600;">Cost (₹ thousand)</p>
+        <div id="stat-cost"></div>
+      </div>
+      <div class="stat-card">
+        <p style="font-size:12px; color:var(--text-secondary); margin:0 0 10px; font-weight:600;">Workload by owner</p>
+        <div id="stat-workload"></div>
+      </div>
+    </div>
+  </div>
+
+  <h2 class="print-heading">Gantt chart</h2>
+  <div id="tab-gantt" style="display:none; background:var(--surface-2); border:0.5px solid var(--border); border-top:none; border-radius:0 0 8px 8px; padding:1.2rem;">
+    <div style="display:flex; align-items:center; gap:16px; font-size:12px; color:var(--text-secondary); margin-bottom:10px; flex-wrap:wrap;">
+      <span style="display:flex; align-items:center; gap:5px;"><span style="width:12px;height:12px;border-radius:3px;background:linear-gradient(135deg,#3B82C4,#D97D3D,#4F9B6E);"></span>Each phase has its own colour</span>
+      <span style="display:flex; align-items:center; gap:5px;"><span style="width:18px;height:10px;background:#3B82C4; clip-path:polygon(0 0, calc(100% - 5px) 0, 100% 50%, calc(100% - 5px) 100%, 0 100%);"></span>Phase bar (arrow tip, rolls up its sub-tasks)</span>
+      <span style="display:flex; align-items:center; gap:5px;"><span style="width:12px;height:12px;border-radius:3px;border:1.5px dashed #BA7517;background:#FAEEDA;"></span>Buffer</span>
+      <span style="display:flex; align-items:center; gap:5px;"><span style="width:12px;height:12px;border-radius:3px;background:var(--delayed);"></span>Delayed</span>
+      <span style="display:flex; align-items:center; gap:5px;"><span style="width:2px;height:12px;background:var(--today);"></span>Today</span>
+      <span style="display:flex; align-items:center; gap:5px;"><svg width="18" height="12" style="flex-shrink:0;"><path d="M1,3 H9 V9 H17" style="stroke:#ec4899; stroke-width:1.4; stroke-dasharray:0.7,2.8; stroke-linecap:round; fill:none;" marker-end="url(#dep-arrowhead-legend)"></path><defs><marker id="dep-arrowhead-legend" markerWidth="4.2" markerHeight="4.2" refX="3.5" refY="1.75" orient="auto"><path d="M0,0 L3.5,1.75 L0,3.5 Z" style="fill:#ec4899;"></path></marker></defs></svg>Dependency link</span>
+      <span style="color:var(--text-muted);">Click <i class="ti ti-chevron-right"></i> to expand a phase into sub-tasks · <i class="ti ti-list-tree"></i> adds a sub-task · <i class="ti ti-corner-down-right"></i> moves this task under another task, turning it into a sub-task · drag a bar's right edge to resize · the darker shade inside a bar shows % complete · the label after each bar shows name, % done and who it's assigned to.</span>
+    </div>
+    <div style="display:flex; align-items:center; gap:10px; margin-bottom:10px;">
+      <button class="iconbtn" onclick="setZoom(-25)" title="Zoom out"><i class="ti ti-minus"></i></button>
+      <span id="zoom-lab" style="font-size:12px; color:var(--text-secondary); min-width:38px; text-align:center;">100%</span>
+      <button class="iconbtn" onclick="setZoom(25)" title="Zoom in"><i class="ti ti-plus"></i></button>
+      <button onclick="fitZoom()" style="font-size:11.5px; padding:4px 10px;">Fit to width</button>
+      <span style="width:0.5px; height:20px; background:var(--border-strong); margin:0 2px;"></span>
+      <button onclick="expandAll(true)" style="font-size:11.5px; padding:4px 10px;" title="Expand every phase into its sub-tasks"><i class="ti ti-chevrons-down" style="font-size:13px; vertical-align:-2px; margin-right:3px;"></i>Expand all</button>
+      <button onclick="expandAll(false)" style="font-size:11.5px; padding:4px 10px;" title="Collapse every phase back to just its rollup bar"><i class="ti ti-chevrons-up" style="font-size:13px; vertical-align:-2px; margin-right:3px;"></i>Collapse all</button>
+      <span id="today-chip" style="font-size:11.5px; color:var(--today); font-weight:600; margin-left:8px;"></span>
+    </div>
+    <div id="ganttScroll" class="gscroll">
+      <div class="grow" id="gruler-row">
+        <div class="gsticky-l" style="font-size:10px; color:var(--text-muted);">Timeline (days from start)</div>
+        <div class="gtrack" id="ruler-track" style="height:16px; background:transparent;"></div>
+        <div class="gsticky-r"></div>
+      </div>
+      <div id="grows-wrap" style="position:relative;">
+        <div id="grows"></div>
+        <svg id="dep-svg" style="position:absolute; top:0; left:0; overflow:visible; pointer-events:none; z-index:1;"></svg>
+      </div>
+    </div>
+  </div>
+
+  <h2 class="print-heading">Task list</h2>
+  <div id="tab-list" style="display:none; background:var(--surface-2); border:0.5px solid var(--border); border-top:none; border-radius:0 0 8px 8px; padding:1.2rem; overflow-x:auto;">
+    <p style="font-size:12px; color:var(--text-muted); margin:0 0 10px;">Task name and duration are editable here too. There are only two kinds of task: Critical (on the main chain — protection is pooled into the single completion buffer at the end) and Feeding (a side chain that gets its own safety buffer before it merges back in). Budgets in ₹ thousand. Row # and column numbers below make it easy to call out a specific cell (e.g. "row 5, column 9"). "Vendor" is the party to follow up with for that task — start typing to see names already used elsewhere. "Quality check" is a per-task gate: paste a checklist link, click the clipboard icon to open it, and the project manager ticks the box once it's been worked through and signed off — a red-outlined box means a task shows 100% complete but hasn't been signed off yet.</p>
+    <datalist id="vendor-suggestions"></datalist>
+    <table id="list-table" style="border-collapse:collapse; width:100%;">
+      <thead>
+        <tr>
+          <th>#</th><th class="l">1. Task</th><th class="l">2. Doer</th><th class="l">3. Type</th><th class="l">4. Depends on</th><th>5. Rel</th>
+          <th class="l" style="padding-left:8px;">6. Type</th><th>7. Safety buffer (days)</th>
+          <th>8. Dur (days)</th><th>9. % done</th>
+          <th>10. Planned start</th><th>11. Planned finish</th><th class="l" style="padding-left:8px;">12. Actual finish</th><th>13. Delay (days)</th>
+          <th class="col-budget">14. Plan (₹K)</th><th class="col-budget">15. Actual (₹K)</th><th class="col-budget">16. Variance (₹K)</th><th class="l" style="padding-left:8px;">17. Link</th>
+          <th class="l" style="padding-left:8px;">18. Vendor</th><th class="l" style="padding-left:8px;">19. Quality check</th>
+        </tr>
+      </thead>
+      <tbody id="lrows"></tbody>
+    </table>
+    <div style="padding:10px 0; display:flex; gap:8px;">
+      <button onclick="addCriticalTask()" style="font-size:12px; padding:5px 10px;"><i class="ti ti-plus" style="font-size:13px; vertical-align:-2px; margin-right:4px;"></i>Add critical task</button>
+      <button onclick="addFeedingChain()" style="font-size:12px; padding:5px 10px;"><i class="ti ti-plus" style="font-size:13px; vertical-align:-2px; margin-right:4px;"></i>Add feeding chain</button>
+      <span style="width:0.5px; height:20px; background:var(--border-strong); margin:0 2px;"></span>
+      <button onclick="expandAll(true)" style="font-size:12px; padding:5px 10px;" title="Expand every phase into its sub-tasks"><i class="ti ti-chevrons-down" style="font-size:13px; vertical-align:-2px; margin-right:4px;"></i>Expand all</button>
+      <button onclick="expandAll(false)" style="font-size:12px; padding:5px 10px;" title="Collapse every phase back to just its rollup row"><i class="ti ti-chevrons-up" style="font-size:13px; vertical-align:-2px; margin-right:4px;"></i>Collapse all</button>
+      <span style="width:0.5px; height:20px; background:var(--border-strong); margin:0 2px;"></span>
+      <button id="btn-budget-toggle" onclick="toggleBudgetCols()" style="font-size:12px; padding:5px 10px;" title="Hide or show the Plan, Actual &amp; Variance (budget) columns"><i class="ti ti-columns-off" style="font-size:13px; vertical-align:-2px; margin-right:4px;"></i>Hide budget columns</button>
+    </div>
+  </div>
+
+  <h2 class="print-heading">3 days planning</h2>
+  <div id="tab-lookahead" style="display:none; background:var(--surface-2); border:0.5px solid var(--border); border-top:none; border-radius:0 0 8px 8px; padding:1.2rem;">
+    <div style="display:flex; align-items:center; gap:16px; flex-wrap:wrap; margin-bottom:12px;">
+      <div style="display:flex; align-items:center; gap:6px; font-size:13px;">
+        <label>From</label>
+        <span id="lh-date" style="font-weight:600;"></span>
+        <span style="font-size:11px; color:var(--text-muted);">(always today)</span>
+      </div>
+      <div style="display:flex; align-items:center; gap:6px; font-size:13px;">
+        <label>Window (days)</label>
+        <input type="number" id="lh-days" min="1" max="30" step="1" value="3" onchange="lookahead.days=Math.max(1,Number(this.value)||3); update();" style="height:28px; width:56px;">
+      </div>
+      <button onclick="copyLookahead()" style="font-size:12px; padding:6px 12px;"><i class="ti ti-copy" style="font-size:14px; vertical-align:-2px; margin-right:4px;"></i>Copy as text</button>
+      <span style="font-size:11.5px; color:var(--text-muted);">Shows sub-tasks directly when a phase is broken down. Overdue tasks stay listed until marked done.</span>
+    </div>
+    <table style="border-collapse:collapse; width:100%;">
+      <thead>
+        <tr>
+          <th class="l">Task</th><th class="l">Type</th><th>Planned start</th><th>Planned finish</th>
+          <th class="l">Status</th><th class="l" style="padding-left:8px;">Owner</th><th class="l" style="padding-left:8px;">Follow-up notes</th>
+          <th class="l" style="padding-left:8px;">Checklists</th>
+        </tr>
+      </thead>
+      <tbody id="lhrows"></tbody>
+    </table>
+    <p id="lh-empty" style="display:none; font-size:12.5px; color:var(--text-muted); margin-top:10px;">No tasks fall inside this window.</p>
+
+    <p style="font-size:13px; font-weight:600; color:var(--gold); margin:18px 0 8px; border-top:0.5px solid var(--border); padding-top:14px;">Gantt view — this window only</p>
+    <p style="font-size:11.5px; color:var(--text-muted); margin:0 0 8px;">The gold tag on each row is its Rel (FS/SS/FF/SF) to its predecessor — same notation as the main Gantt tab. An arrow links two bars only when both fall inside this window; widen the window to see more links.</p>
+    <div id="lh-gantt"></div>
+  </div>
+
+  <h2 class="print-heading">Daily follow-up</h2>
+  <div id="tab-daily" style="display:none; background:var(--surface-2); border:0.5px solid var(--border); border-top:none; border-radius:0 0 8px 8px; padding:1.2rem;">
+    <div style="display:flex; align-items:center; gap:16px; flex-wrap:wrap; margin-bottom:8px;">
+      <div style="display:flex; align-items:center; gap:6px; font-size:13px;">
+        <label>Day</label>
+        <input type="date" id="dd-date" onchange="daily.date=this.value; update();" style="height:28px;">
+      </div>
+      <div style="display:flex; align-items:center; gap:6px; font-size:13px;">
+        <label>Site day starts</label>
+        <input type="time" id="dd-start" onchange="meta.dayStart=this.value; update();" style="height:28px;">
+      </div>
+      <button onclick="copyDaily()" style="font-size:12px; padding:6px 12px;"><i class="ti ti-copy" style="font-size:14px; vertical-align:-2px; margin-right:4px;"></i>Copy as text</button>
+    </div>
+    <p style="font-size:11.5px; color:var(--text-muted); margin:0 0 6px;">Assign each task to a half-day shift. Follow-up owner is fully automatic and cannot be overridden: the EA follows up new/on-track tasks, and the process coordinator handles any delayed (overdue) task. Site supervisor pre-fills from the Summary team list; override per task if needed.</p>
+    <div id="daily-body"></div>
+  </div>
+
+  <h2 class="print-heading">Material &amp; Resource</h2>
+  <div id="tab-vendors" style="display:none; background:var(--surface-2); border:0.5px solid var(--border); border-top:none; border-radius:0 0 8px 8px; padding:1.2rem; overflow-x:auto;">
+    <p style="font-size:13px; font-weight:600; color:var(--gold); margin:0 0 6px;">Material &amp; resource readiness — next 7–10 days</p>
+    <p style="font-size:12px; color:var(--text-secondary); margin:0 0 10px; max-width:1000px;">To be filled by the person managing the project. For every task starting soon, confirm all three — <b>Drawings</b>, <b>Material</b> and <b>Labour</b> — before the task is released. <b>Work shall not start on a task until all three are confirmed</b>, so material reaches on time and resources are managed for a seamless flow into the next task.<br>
+    <span style="color:var(--text-muted);"><b>Drawings</b> — the GFC / shop drawing the crew works from is issued, current revision, and on site.&nbsp;&nbsp;
+    <b>Material</b> — paste the <b>MR (material request) link</b>; tick only once the MR is raised, approved and the material is received and tallied at site.&nbsp;&nbsp;
+    <b>Labour</b> — the process coordinator asks the labour contractor whether the manpower for this specific work is available and whether he is facing any issue. Paste the <b>Google Form link</b> the contractor fills; the FMS runs off that form's responses, and the box is ticked only on a confirmed "available, no issues".</span></p>
+    <div style="display:flex; align-items:center; gap:8px; margin-bottom:10px;">
+      <label style="font-size:12.5px;">Window (days)</label>
+      <input type="number" id="rd-days" min="7" max="10" step="1" value="7" onchange="readiness_.days=Math.max(7,Math.min(10,Number(this.value)||7)); update();" style="height:28px; width:56px;">
+      <span id="rd-banner" style="font-size:12px; font-weight:600;"></span>
+    </div>
+    <table style="border-collapse:collapse; width:100%; margin-bottom:22px;">
+      <thead>
+        <tr>
+          <th class="l">Task</th><th class="l">Type</th><th>Starts</th><th class="l">In</th>
+          <th class="l">Drawings</th><th class="l">Material (MR link)</th><th class="l">Labour (contractor form)</th><th class="l">Status</th>
+        </tr>
+      </thead>
+      <tbody id="rdrows"></tbody>
+    </table>
+    <p id="rd-empty" style="display:none; font-size:12.5px; color:var(--text-muted); margin:-10px 0 22px;">No tasks start inside this window.</p>
+
+    <p style="font-size:13px; font-weight:600; color:var(--gold); margin:0 0 6px; border-top:0.5px solid var(--border); padding-top:14px;">Vendor payment schedule</p>
+    <p style="font-size:12px; color:var(--text-muted); margin:0 0 10px;">Work order number is the key to reconcile each row against the vendor's own FMS. Amounts in ₹ thousand.</p>
+    <table style="border-collapse:collapse; width:100%;">
+      <thead>
+        <tr>
+          <th class="l">Vendor</th><th class="l">Work order no.</th><th class="l">Milestone / description</th>
+          <th>Scheduled date</th><th>Scheduled (₹K)</th><th class="l" style="padding-left:8px;">Actual date</th><th>Actual (₹K)</th>
+          <th>Variance (₹K)</th><th class="l">Status</th><th class="l" style="padding-left:8px;">Notes</th><th></th>
+        </tr>
+      </thead>
+      <tbody id="vrows"></tbody>
+    </table>
+    <div style="padding:8px 0;"><button onclick="addVendorRow()" style="font-size:12px; padding:5px 10px;"><i class="ti ti-plus" style="font-size:13px; vertical-align:-2px; margin-right:4px;"></i>Add vendor payment</button></div>
+  </div>
+
+</div>
+
+<!-- Hidden write channel for Google Sheet sync: a real <form> submitted into a hidden <iframe> is
+     a normal browser navigation, not a fetch()/XHR call, so it is NEVER subject to CORS blocking —
+     unlike fetch(), it reliably reaches the Apps Script backend even on networks/browsers where
+     fetch() to script.google.com gets silently blocked. We can't read the response this way, so a
+     separate small GET (fetch, which has been reliable for reads) confirms success afterwards. -->
+<iframe name="sync-frame" style="display:none;" title="sync"></iframe>
+<form id="sync-form" method="POST" target="sync-frame" style="display:none;">
+  <input type="hidden" name="payload" id="sync-form-payload">
+</form>
+
+<script>
+const teamRoles = [
+  ['pm','Project manager'], ['ss','Site supervisor'], ['barBinder','Bar binder'],
+  ['shuttering','Shuttering team'], ['brickwork','Brickwork team'], ['guard','Site guard'],
+  ['pc','Process coordinator'], ['architect','Architect'], ['structural','Structural designer']
+];
+function emptyTeam(){ const t={}; teamRoles.forEach(([k])=>{ t[k]={name:'',phone:''}; }); return t; }
+
+let meta = {name:'', client:'', location:'', start: new Date().toISOString().slice(0,10), deliveryDate:'', dayStart:'08:00', qaLink:'', team: emptyTeam()};
+let activeTabId = 'summary';
+let lookahead = {from: new Date().toISOString().slice(0,10), days: 3};
+let readiness_ = {days: 7};
+let daily = {date: (()=>{ const d=new Date(); d.setDate(d.getDate()+1); return d.toISOString().slice(0,10); })()};
+let zoomPct = 100;
+// Google Sheet sync — syncUrl is the Apps Script Web App URL (see the bundled Code.gs); when
+// autoSync is on, every update() call schedules a debounced push so the Sheet mirrors the tool.
+let syncUrl = 'https://script.google.com/macros/s/AKfycbxjI_1rG98COmWwDiwudo5YP2lKwo72DVVJrxJBFnDTXfVXEY4dTVzLFz3efcHsyy_Atw/exec';
+let autoSync = true;
+let syncTimer = null;
+let syncInFlight = false;
+let lastSyncAt = '';
+// syncDirty just marks "something changed since the last successful sync" — the actual push
+// happens on a fixed 30-second timer below, not on every keystroke, so rapid edits don't spam
+// the Apps Script endpoint with a request per change.
+let syncDirty = false;
+// holds the timer for the "retry once more after 60s" fallback when the 3 quick retries all fail
+let fallbackRetryTimer = null;
+
+// ---------------- Local browser backup (always-on, independent of Google Sheet sync) ----------------
+// This is the primary guarantee that data never disappears from the page on reload — it works
+// even with no internet connection or if Google Sheet sync is failing entirely. Google Sheet sync
+// (elsewhere in this file) is a separate, secondary layer for backup/sharing across devices; this
+// local copy is what makes sure YOU never lose what you typed just by reloading or closing the tab.
+const LOCAL_KEY = 'ccpm_local_state_v1';
+let localSaveTimer = null;
+function scheduleLocalSave(){
+  clearTimeout(localSaveTimer);
+  localSaveTimer = setTimeout(saveLocal, 300);
+}
+function saveLocal(){
+  try {
+    const snap = JSON.stringify({meta, lookahead, daily, readiness_, zoomPct, criticalTasks, feedingChains, vendorPayments, syncUrl, autoSync});
+    localStorage.setItem(LOCAL_KEY, snap);
+    localStorage.setItem(LOCAL_KEY + '_savedAt', new Date().toISOString());
+    const el = document.getElementById('local-save-status');
+    if(el) el.textContent = 'Saved on this device ' + new Date().toLocaleTimeString('en-IN', {hour:'2-digit', minute:'2-digit'});
+  } catch(err){
+    // storage full/blocked (e.g. private browsing) — non-fatal, Google Sheet sync still covers backup
+    const el = document.getElementById('local-save-status');
+    if(el) el.textContent = 'Could not save locally (' + err.message + ') — relying on Google Sheet sync only';
+  }
+}
+function loadLocal(){
+  try {
+    const raw = localStorage.getItem(LOCAL_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch(err){ return null; }
+}
+function clearLocalBackup(){
+  try { localStorage.removeItem(LOCAL_KEY); localStorage.removeItem(LOCAL_KEY + '_savedAt'); } catch(err){}
+}
+// projectExists gates auto-sync: nothing is pushed to the Sheet until the person explicitly
+// clicks "Create project" (or loads/switches to a project that already has a Sheet). This stops
+// a placeholder name typed while trying the tool out from silently spawning a real Google Sheet.
+let projectExists = false;
+const BASE_PXW = 5;
+let historyStack = [];
+let historyPos = -1;
+let suppressSnapshot = false;
+let snapTimer = null;
+let dragSrcKind = null;
+let dragSrcIndex = null;
+
+// preds is the unified predecessor-reference string, e.g. "2FS,3SS" — a task can list any number
+// of comma-separated "task# + relation" entries (task# is the unified # shown in the # column,
+// spanning both critical-chain and feeding-chain tasks); its actual start is the LATEST of every
+// listed constraint. Left blank (or a bare relation with no number, e.g. just "SS") it defaults to
+// the task directly above this one in its own list. See parsePreds()/schedule().
+function newTask(name,duration,plan){ return {name, duration, plan, act:'', adate:'', owner:'', notes:'', shift:'', preds:'', pct:0, infoReady:false, materialReady:false, labourReady:false, link:'', infoLink:'', materialLink:'', labourLink:'', qcLink:'', qcDone:false, vendor:'', taskType:'critical', buffer:0, subtasks:[], expanded:false}; }
+// ---------------------------------------------------------------------------------------------
+// BLANK STARTING TEMPLATE — no project data baked in. Use "Add critical task" / "Add feeding
+// chain" in the Task list or Gantt tab to build up a new project from scratch, or use "Load data"
+// to import a previously saved .json export.
+// ---------------------------------------------------------------------------------------------
+// mkSub() is kept even though unused by default here, in case you paste in phase()/chain()-style
+// data (like the Residential build's) using the same shorthand this tool's other project files use.
+function mkSub(a){ var t = newTask(a[0], a[1], a[2]); t.owner = a[3]; t.vendor = a[4]; t.notes = a[5]; return t; }
+
+let criticalTasks = [];
+let feedingChains = [];
+let vendorPayments = [];
+const origState = JSON.stringify({meta, lookahead, daily, readiness_, zoomPct, criticalTasks, feedingChains, vendorPayments, syncUrl, autoSync});
+
+function fmt(n){ return Math.round(n*10)/10; }
+function money(n){ const r = Math.round(n*10)/10; return (r>0?'+':'') + r.toLocaleString('en-IN'); }
+function startDate(){ return new Date((meta.start||'2026-08-01')+'T00:00:00'); }
+function dateAt(days){ const d = startDate(); d.setDate(d.getDate()+Math.round(days)); return d; }
+function fmtD(d){ return d.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'2-digit'}); }
+function hasSub(t){ return !!(t.subtasks && t.subtasks.length); }
+// a phase's own rolled-up duration must include each critical sub-task's own safety buffer, so
+// it stays consistent with where scheduleSubtasks() actually lays the last sub-task's end.
+function taskDuration(t){ return hasSub(t) ? t.subtasks.reduce((s,x)=>s+(Number(x.duration)||0)+safetyBuf(x),0) : (Number(t.duration)||0); }
+function rollupPlan(t){ return t.subtasks.reduce((s,x)=>s+(Number(x.plan)||0),0); }
+function rollupAct(t){
+  const any = t.subtasks.some(x=>x.act!==''&&x.act!=null);
+  if(!any) return '';
+  return t.subtasks.reduce((s,x)=>s+((x.act===''||x.act==null)?0:Number(x.act)),0);
+}
+function rollupAdate(t){
+  const all = t.subtasks.every(x=>x.adate);
+  if(!all) return '';
+  return t.subtasks.reduce((mx,x)=> (x.adate>mx?x.adate:mx), t.subtasks[0].adate);
+}
+function rollupPct(t){
+  const totalDur = t.subtasks.reduce((s,x)=>s+(Number(x.duration)||0),0);
+  if(totalDur<=0) return 0;
+  const weighted = t.subtasks.reduce((s,x)=>s+(Number(x.pct)||0)*(Number(x.duration)||0),0);
+  return Math.round(weighted/totalDur);
+}
+// one distinct colour per phase (top-level task), cycling through this palette; feeding-chain
+// phases continue the same rotation offset by criticalTasks.length so they don't repeat immediately.
+const PHASE_PALETTE = [
+  {base:'#3B82C4', light:'#A9D0EC'},
+  {base:'#D97D3D', light:'#F3C79E'},
+  {base:'#4F9B6E', light:'#AEDDC0'},
+  {base:'#8B5FBF', light:'#D1BCE6'},
+  {base:'#C4483B', light:'#EFAFA6'},
+  {base:'#3BA6A6', light:'#A6E1E1'},
+  {base:'#B08D3E', light:'#E5CE96'},
+  {base:'#5C7A99', light:'#B8CADA'},
+];
+function phaseColor(kind, i){
+  const idx = kind==='crit' ? i : (criticalTasks.length + i);
+  return PHASE_PALETTE[((idx%PHASE_PALETTE.length)+PHASE_PALETTE.length)%PHASE_PALETTE.length];
+}
+function escHtml(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+// task name (bold) + % complete + delegate, shown to the right of the bar — mirrors how
+// dedicated Gantt tools (Smartsheet, ProjectManager) label bars.
+function barLabelHtml(t, isPhase){
+  const name = escHtml(shortName(t.name));
+  const displayName = isPhase ? name.toUpperCase() : name;
+  const pct = fmt(t.pct||0);
+  const owner = t.owner ? escHtml(t.owner) : '';
+  // phases carry a small "PHASE" tag right on the Gantt bar's own label, so the annotation is
+  // visible on the chart itself and not just in the row header to the left.
+  const phaseTag = isPhase ? `<span style="font-size:4.9px; font-weight:800; letter-spacing:0.3px; color:var(--gold); background:rgba(176,141,62,0.18); border-radius:2px; padding:0 3px; margin-right:3px;">PHASE</span>` : '';
+  // owner is intentionally left off the on-bar label (still shown in the Task List tab and in
+  // the bar's hover tooltip) — with many stacked tasks it was the single biggest contributor to
+  // label width, which is what was causing labels to run into neighbouring rows/columns.
+  return `${phaseTag}<b style="${isPhase?'letter-spacing:0.2px;':''}">${displayName}</b> <span style="font-weight:500; opacity:0.72;">${pct}%</span>`;
+}
+function darken(hex, amt){
+  hex = String(hex).replace('#','');
+  if(hex.length===3) hex = hex.split('').map(c=>c+c).join('');
+  const num = parseInt(hex,16);
+  if(isNaN(num)) return hex;
+  let r = (num>>16)&255, g=(num>>8)&255, b=num&255;
+  r = Math.max(0, Math.round(r*(1-amt)));
+  g = Math.max(0, Math.round(g*(1-amt)));
+  b = Math.max(0, Math.round(b*(1-amt)));
+  return '#'+[r,g,b].map(x=>x.toString(16).padStart(2,'0')).join('');
+}
+function setProgress(id, pct, baseHex){
+  const el = document.getElementById(id); if(!el) return;
+  const p = Math.max(0, Math.min(100, Number(pct)||0));
+  el.style.width = p+'%';
+  el.style.background = darken(baseHex, 0.32);
+}
+function taskPath(kind,i,si){
+  const base = kind==='crit' ? `criticalTasks[${i}]` : `feedingChains[${i}].tasks[0]`;
+  return (si===null||si===undefined) ? base : `${base}.subtasks[${si}]`;
+}
+function taskNumber(kind,i,si){
+  const n = kind==='crit' ? (i+1) : (criticalTasks.length + i + 1);
+  return (si===null||si===undefined) ? String(n) : `${n}.${si+1}`;
+}
+function addTime(hhmm,hrs){
+  const [hh,mm] = (hhmm||'08:00').split(':').map(Number);
+  let total = ((hh*60+mm) + hrs*60) % 1440; if(total<0) total += 1440;
+  const H = Math.floor(total/60), M = Math.round(total%60);
+  return String(H).padStart(2,'0')+':'+String(M).padStart(2,'0');
+}
+
+// isFeed tells us whether this sub-task's parent lives in a feeding chain — only feeding tasks
+// carry an individual safety buffer; critical-chain sub-tasks never do (their protection is
+// pooled into the single completion buffer at the very end of the project, per CCPM).
+function scheduleSubtasks(t, isFeed){
+  if(!hasSub(t)) return;
+  let sc = t.start;
+  t.subtasks.forEach(st => {
+    if(st.buffer===undefined) st.buffer = 0;
+    st.duration = Number(st.duration)||0;
+    const buf = safetyBuf(st, isFeed);
+    st.start = sc + buf;
+    sc = st.start + st.duration;
+    st.end = sc;
+  });
+}
+
+// only feeding-chain tasks/sub-tasks get an individual manual buffer — critical-chain tasks never
+// do, since their safety is pooled into the single completion buffer at the end of the project.
+function safetyBuf(t, isFeed){ return isFeed ? (Number(t.buffer)||0) : 0; }
+
+// all top-level tasks (critical-chain then feeding-chain) in one flat list, indexed 0..N-1 — index
+// order matches the unified 1-based numbering shown in the # column and resolved by taskByNumber().
+function allTopLevelTasks(){ return criticalTasks.concat(feedingChains.map(fc=>fc.tasks[0])); }
+// parses a predecessor string like "2FS,3SS" into [{num,rel}, ...] — num is the 1-based unified
+// task #, rel is FS/SS/FF/SF. A bare relation with no number (e.g. just "FS") is a single-entry
+// shorthand resolved elsewhere as "the task directly above this one, in its own list". Unparseable
+// tokens are silently dropped so a task never loses its other valid constraints over one typo.
+function parsePreds(raw){
+  const str = String(raw||'').trim();
+  if(!str) return [];
+  return str.split(',').map(s=>s.trim()).filter(Boolean).map(p => {
+    const m = p.match(/^(\d+)?\s*(FS|SS|FF|SF)$/i);
+    if(!m) return null;
+    return {num: m[1] ? parseInt(m[1],10) : null, rel: m[2].toUpperCase()};
+  }).filter(Boolean);
+}
+// the global (allTopLevelTasks()) index of "the task directly above" a given global index, within
+// its OWN list only — i.e. a critical task's default predecessor is the previous critical task, and
+// a feeding task's default predecessor is the previous feeding task, never crossing between the two
+// lists. Returns null for the first task in either list (nothing above it to default to).
+function aboveGlobalIndex(idx, isFeed, nCrit){
+  if(isFeed) return idx>nCrit ? idx-1 : null;
+  return idx>0 ? idx-1 : null;
+}
+// resolves one predecessor constraint (a relation type + the already-scheduled predecessor task)
+// into a candidate start day for the dependent task t.
+function relStart(rel, prev, t){
+  if(rel==='SS') return prev.start;
+  if(rel==='FF') return prev.end - t.duration;
+  if(rel==='SF') return prev.start - t.duration;
+  return prev.end; // FS (default)
+}
+function schedule(){
+  const all = allTopLevelTasks();
+  const n = all.length;
+  const nCrit = criticalTasks.length;
+  all.forEach(t => {
+    if(t.preds===undefined) t.preds = '';
+    t.duration = taskDuration(t);
+  });
+  const computed = new Array(n).fill(false);
+  const visiting = new Array(n).fill(false);
+  function computeOne(idx){
+    if(computed[idx]) return;
+    const t = all[idx];
+    if(visiting[idx]){
+      // circular predecessor reference (e.g. task 2 -> task 6 -> task 2) — break the loop safely
+      t.start = 0; t.end = t.duration;
+      computed[idx] = true; visiting[idx] = false;
+      return;
+    }
+    visiting[idx] = true;
+    const isFeed = idx>=nCrit;
+    const buf = safetyBuf(t, isFeed); // only feeding tasks carry an individual buffer; it sits just before the task, after all its predecessor constraints are resolved
+    const parsed = parsePreds(t.preds);
+    let starts = [];
+    if(parsed.length===1 && parsed[0].num===null){
+      const aboveIdx = aboveGlobalIndex(idx, isFeed, nCrit);
+      if(aboveIdx!==null){ computeOne(aboveIdx); starts.push(relStart(parsed[0].rel, all[aboveIdx], t)); }
+    } else if(!parsed.length){
+      const aboveIdx = aboveGlobalIndex(idx, isFeed, nCrit);
+      if(aboveIdx!==null){ computeOne(aboveIdx); starts.push(relStart('FS', all[aboveIdx], t)); }
+    } else {
+      parsed.forEach(p => {
+        if(!p.num) return;
+        const pIdx = p.num-1;
+        if(pIdx<0 || pIdx>=n || pIdx===idx) return;
+        computeOne(pIdx);
+        starts.push(relStart(p.rel, all[pIdx], t));
+      });
+    }
+    let s = starts.length ? Math.max(...starts) : 0;
+    s = Math.max(0, s) + buf;
+    t.start = s; t.end = s + t.duration;
+    scheduleSubtasks(t, isFeed);
+    if(hasSub(t)){ t.plan = rollupPlan(t); t.act = rollupAct(t); t.adate = rollupAdate(t); t.pct = rollupPct(t); }
+    computed[idx] = true; visiting[idx] = false;
+  }
+  for(let idx=0; idx<n; idx++) computeOne(idx);
+  const chainSum = Math.max(0, ...criticalTasks.map(t=>t.end));
+  const completionBuffer = chainSum*0.3; // conservative 30% pooled safety (client preference)
+  const total = chainSum + completionBuffer;
+  return {chainSum, completionBuffer, total};
+}
+
+function delayDays(t){
+  if(!t.adate) return null;
+  return Math.round((new Date(t.adate+'T00:00:00') - dateAt(t.end))/86400000);
+}
+function delayHtml(t){
+  const d = delayDays(t);
+  if(d===null) return '<span style="color:var(--text-muted);">—</span>';
+  if(d>0) return `<span style="color:var(--red); font-weight:600;">+${d}</span>`;
+  return `<span style="color:var(--green); font-weight:600;">${d}</span>`;
+}
+function varHtml(t){
+  if(t.act===''||t.act===null||t.act===undefined) return '<span style="color:var(--text-muted);">—</span>';
+  const v = (Number(t.act)||0) - (Number(t.plan)||0);
+  return `<span style="color:${v>0?'var(--red)':'var(--green)'}; font-weight:600;">${money(v)}</span>`;
+}
+function setBar(id,left,width,total){
+  const el = document.getElementById(id); if(!el) return;
+  el.style.left = (left/total*100).toFixed(2)+'%';
+  el.style.width = (width/total*100).toFixed(2)+'%';
+}
+// hover tooltip on a Gantt bar (and its label) showing planned start/finish — startDay/endDay are
+// in schedule days, converted to real calendar dates via dateAt().
+function setBarTitle(id, startDay, endDay){
+  const el = document.getElementById(id); if(!el) return;
+  el.title = `Planned start: ${fmtD(dateAt(startDay))}\nPlanned finish: ${fmtD(dateAt(endDay))}`;
+}
+function setT(id,html){ const el = document.getElementById(id); if(el) el.innerHTML = html; }
+function shortName(name){
+  if(!name) return '';
+  let s = String(name).split(' — ')[0].split(' (')[0].trim();
+  if(s.length > 24) s = s.slice(0,22).trim()+'…';
+  return s;
+}
+// startDay/endDay are the bar's own start/end (in schedule days). The label defaults to sitting
+// just after the bar's end; fixLabelOverlaps() may later flip it to sit before the bar's start
+// instead, if the default position would run into the sticky-right column. Both anchor points are
+// stashed as data attributes so that flip can be computed/re-computed without re-rendering.
+function setBarLabel(id,startDay,endDay,total,html){
+  const el = document.getElementById(id); if(!el) return;
+  const startPct = (total>0 ? (startDay/total*100) : 0).toFixed(2);
+  const endPct = (total>0 ? (endDay/total*100) : 0).toFixed(2);
+  el.setAttribute('data-start-pct', startPct);
+  el.setAttribute('data-end-pct', endPct);
+  if(el.classList) el.classList.remove('flip');
+  el.style.left = endPct+'%';
+  el.style.right = '';
+  el.innerHTML = html;
+}
+// after labels are positioned, check each one against its row's sticky-right column (which is
+// pinned to the visible edge of the scrolled viewport, not a fixed point on the timeline) and
+// flip any that would otherwise overlap it to sit before the bar instead of after.
+function fixLabelOverlaps(){
+  if(typeof document.querySelectorAll !== 'function') return;
+  const rows = document.querySelectorAll('.grow');
+  if(!rows || typeof rows.forEach !== 'function') return;
+  rows.forEach(row => {
+    if(!row || typeof row.querySelector !== 'function' || typeof row.querySelectorAll !== 'function') return;
+    const stickyR = row.querySelector('.gsticky-r');
+    if(!stickyR || typeof stickyR.getBoundingClientRect !== 'function') return;
+    const sRect = stickyR.getBoundingClientRect();
+    if(!sRect || (sRect.width===0 && sRect.height===0)) return;
+    row.querySelectorAll('.bar-label').forEach(label => {
+      if(typeof label.getBoundingClientRect !== 'function') return;
+      const startPct = label.getAttribute('data-start-pct');
+      const endPct = label.getAttribute('data-end-pct');
+      if(startPct===null || endPct===null) return;
+      if(label.classList) label.classList.remove('flip');
+      label.style.left = endPct+'%';
+      label.style.right = '';
+      const lRect = label.getBoundingClientRect();
+      if(!lRect || (lRect.width===0 && lRect.height===0)) return;
+      if(lRect.right > sRect.left){
+        if(label.classList) label.classList.add('flip');
+        label.style.left = '';
+        label.style.right = (100-Number(startPct))+'%';
+      }
+    });
+  });
+}
+function isDelayed(t){
+  const d = delayDays(t);
+  if(d!==null) return d>0;
+  const today = new Date(); today.setHours(0,0,0,0);
+  return dateAt(t.end) < today;
+}
+function colorBar(id, delayed, baseColor){
+  const el = document.getElementById(id); if(!el) return;
+  const c = delayed ? 'var(--delayed)' : baseColor;
+  el.style.background = c;
+  el.style.color = c; // lets .bar-phase's flag markers (currentColor) match the bar's own colour
+}
+
+function allLeafTasks(){
+  let out = [];
+  criticalTasks.forEach(t => { if(hasSub(t)) out = out.concat(t.subtasks); else out.push(t); });
+  feedingChains.forEach(fc => { const t = fc.tasks[0]; if(hasSub(t)) out = out.concat(t.subtasks); else out.push(t); });
+  return out;
+}
+
+function pxPerDay(){ return BASE_PXW * zoomPct/100; }
+function setZoom(delta){ zoomPct = Math.max(50, Math.min(400, zoomPct+delta)); applyZoomWidths(); }
+function fitZoom(){
+  const el = document.getElementById('ganttScroll');
+  const cw = (el && el.clientWidth) ? el.clientWidth : 900;
+  const avail = Math.max(200, cw - 320 - 260 - 20);
+  const {total} = schedule();
+  const z = Math.round(avail/(BASE_PXW*Math.max(total,1))*100);
+  zoomPct = Math.max(50, Math.min(400, isFinite(z) ? z : 100));
+  applyZoomWidths();
+}
+function applyZoomWidths(){
+  const {total} = schedule();
+  const w = Math.max(200, total*pxPerDay());
+  document.querySelectorAll('.gtrack').forEach(el => { el.style.width = w+'px'; });
+  setT('zoom-lab', zoomPct+'%');
+  update();
+}
+
+// pure logic (no DOM) — which task bar connects to which, and via what relation. A task with a
+// multi-relation preds string (e.g. "2FS,3SS") emits ONE connection per listed predecessor, so it
+// shows multiple incoming arrows converging on it. Kept separate from drawDependencyArrows() so it
+// can be unit-tested without a real browser.
+function dependencyConnections(){
+  const all = allTopLevelTasks();
+  const nCrit = criticalTasks.length;
+  const conns = [];
+  function idOf(idx){ return idx<nCrit ? 'bar-crit-'+idx : 'bar-feed-'+(idx-nCrit); }
+  all.forEach((t, idx) => {
+    const isFeed = idx>=nCrit;
+    const tgtId = idOf(idx);
+    const parsed = parsePreds(t.preds);
+    if(!parsed.length || (parsed.length===1 && parsed[0].num===null)){
+      const rel = parsed.length ? parsed[0].rel : 'FS';
+      const aboveIdx = aboveGlobalIndex(idx, isFeed, nCrit);
+      if(aboveIdx!==null) conns.push({srcId:idOf(aboveIdx), tgtId, rel});
+      return;
+    }
+    parsed.forEach(p => {
+      if(!p.num) return;
+      const pIdx = p.num-1;
+      if(pIdx<0 || pIdx>=all.length || pIdx===idx) return;
+      conns.push({srcId:idOf(pIdx), tgtId, rel:p.rel});
+    });
+  });
+  return conns;
+}
+// which edge of the source/target bar a relation type connects from/to
+function relAnchorSides(rel){
+  if(rel==='SS') return ['left','left'];
+  if(rel==='FF') return ['right','right'];
+  if(rel==='SF') return ['left','right'];
+  return ['right','left']; // FS (default)
+}
+// builds the elbow-connector path "M...H...V...H..." between two anchor points. The final
+// horizontal run (into the target) always has a fixed length of ARROW_LEAD px, regardless of how
+// close source and target are — when bars sit directly back-to-back (the common case for a
+// zero-buffer FS chain, where the target's left edge lands on the exact same pixel as the source's
+// right edge) that final run would otherwise collapse to zero length; with a zero-length last
+// segment the arrowhead's "auto" orientation has no horizontal tangent to align to and rotates to
+// follow the vertical drop instead, so it ends up pointing down into the bar rather than sideways
+// into its edge — which is what "the arrow is going inside the task" was actually caused by. Always
+// reserving this fixed final run keeps the arrowhead approaching horizontally from just outside the
+// target's edge, like a normal Gantt elbow connector.
+// tSide is which edge of the TARGET the arrow lands on ('left' = its front/start, 'right' = its
+// back/finish). The final approach direction is driven by tSide alone, never by comparing raw s.x
+// vs t.x — a left-entry always approaches left-to-right (arrowhead pointing forward into the
+// front) and a right-entry always approaches right-to-left, with no exceptions. Deciding it from
+// the raw coordinates instead (as an earlier version did) meant that whenever rounding or an
+// unusual predecessor reference put t.x a hair to the left of s.x, the arrow would flip and point
+// backward into the bar — exactly the "disturbing" reversed arrowhead this fixes.
+const ARROW_LEAD = 10;
+function elbowPath(s, t, tSide){
+  const midX = (tSide === 'right') ? (t.x + ARROW_LEAD) : (t.x - ARROW_LEAD);
+  return `M${s.x.toFixed(1)},${s.y.toFixed(1)} H${midX.toFixed(1)} V${t.y.toFixed(1)} H${t.x.toFixed(1)}`;
+}
+// draws elbow connector lines + arrowheads between related task bars on the Gantt chart,
+// mirroring the dependency-arrow view construction ERPs show. Measures live rendered bar
+// positions via getBoundingClientRect so it stays correct at any zoom level / after any edit.
+function drawDependencyArrows(){
+  const svg = document.getElementById('dep-svg');
+  const wrap = document.getElementById('grows-wrap');
+  const grows = document.getElementById('grows');
+  if(!svg || !wrap || !grows || typeof wrap.getBoundingClientRect !== 'function') return;
+  const w = grows.scrollWidth || wrap.scrollWidth || 0;
+  const h = grows.scrollHeight || wrap.scrollHeight || 0;
+  svg.setAttribute('width', w);
+  svg.setAttribute('height', h);
+  svg.style.width = w+'px';
+  svg.style.height = h+'px';
+  const wrapRect = wrap.getBoundingClientRect();
+  function anchor(elId, side){
+    const el = document.getElementById(elId);
+    if(!el || typeof el.getBoundingClientRect !== 'function') return null;
+    const r = el.getBoundingClientRect();
+    if(!r || (r.width===0 && r.height===0)) return null; // not rendered (row collapsed / tab hidden)
+    const y = (r.top - wrapRect.top) + r.height/2;
+    const x = (side==='left') ? (r.left - wrapRect.left) : (r.right - wrapRect.left);
+    return {x,y};
+  }
+  let paths = '';
+  dependencyConnections().forEach(({srcId,tgtId,rel}) => {
+    const [sSide,tSide] = relAnchorSides(rel);
+    const s = anchor(srcId, sSide);
+    const t = anchor(tgtId, tSide);
+    if(!s || !t) return;
+    const d = elbowPath(s, t, tSide);
+    paths += `<path d="${d}" style="stroke:#ec4899; stroke-width:1.4; stroke-dasharray:0.7,2.8; stroke-linecap:round; fill:none;" marker-end="url(#dep-arrowhead)"></path>`;
+  });
+  svg.innerHTML = `<defs><marker id="dep-arrowhead" markerWidth="6.3" markerHeight="6.3" refX="4.9" refY="2.45" orient="auto"><path d="M0,0 L4.9,2.45 L0,4.9 Z" style="fill:#ec4899;"></path></marker></defs>${paths}`;
+}
+
+function update(){
+  const {chainSum, completionBuffer, total} = schedule();
+  const bufDays = Math.round(completionBuffer);
+  const consumed = criticalTasks.reduce((s,t)=>{ const d = delayDays(t); return s+(d>0?d:0); },0);
+  const pct = bufDays>0 ? Math.round(consumed/bufDays*100) : 0;
+  const bufCol = pct<34 ? 'var(--green)' : (pct<67 ? 'var(--amber)' : 'var(--red)');
+  const leaves = allLeafTasks();
+  const planTot = leaves.reduce((s,t)=>s+(Number(t.plan)||0),0);
+  const actTot = leaves.reduce((s,t)=>s+(Number(t.act)||0),0);
+  const varTot = leaves.reduce((s,t)=> s + ((t.act===''||t.act==null) ? 0 : (Number(t.act)||0)-(Number(t.plan)||0)), 0);
+
+  document.getElementById('metrics').innerHTML = `
+    <div class="card"><p class="lab">Critical chain</p><p class="val">${fmt(chainSum)} days</p></div>
+    <div class="card"><p class="lab">Completion buffer</p><p class="val">${fmt(completionBuffer)} days</p></div>
+    <div class="card"><p class="lab">Calculated completion</p><p class="val">${fmtD(dateAt(total))}</p></div>
+    <div class="card"><p class="lab">Buffer consumed</p><p class="val" style="color:${bufCol};">${consumed}/${bufDays} d (${pct}%)</p></div>
+    <div class="card"><p class="lab">Budget plan / actual (₹K)</p><p class="val">${planTot.toLocaleString('en-IN')} / ${actTot.toLocaleString('en-IN')} <span style="font-size:13px; color:${varTot>0?'var(--red)':'var(--green)'};">${money(varTot)}</span></p></div>`;
+
+  setT('m-delivery', fmtD(dateAt(total)) + ' · day ' + fmt(total));
+  {
+    // compares the user-editable promised delivery date against the schedule's own calculated
+    // completion date, so it's obvious at a glance whether the promise still has slack in it.
+    const varEl = document.getElementById('m-delivery-variance');
+    if(varEl){
+      if(!meta.deliveryDate){ varEl.textContent = ''; }
+      else {
+        const promised = new Date(meta.deliveryDate+'T00:00:00');
+        const calc = dateAt(total);
+        const diffDays = Math.round((promised - calc)/86400000);
+        if(diffDays >= 0){ varEl.textContent = `${diffDays} day(s) of slack before the promised date`; varEl.style.color = 'var(--green)'; }
+        else { varEl.textContent = `${Math.abs(diffDays)} day(s) past the promised date — at risk`; varEl.style.color = 'var(--red)'; }
+      }
+    }
+  }
+
+  // every day gets a number now (not just week marks) — week marks (0,7,14,...) render bold and
+  // bigger so they still read as the "weeks" landmarks at a glance, while the everyday numbers
+  // in between are smaller so they don't turn the ruler into a wall of text. Those smaller
+  // in-between numbers only start showing once zoomed in to 150%+, where there's actually room
+  // for them; below that, only the bold week marks show, same as before.
+  let ticks = '';
+  const totalDays = Math.floor(total);
+  for(let d=0; d<=totalDays; d++){
+    const isWeekMark = d % 7 === 0;
+    if(!isWeekMark && zoomPct < 150) continue;
+    const size = isWeekMark ? '11px' : '9px';
+    const weight = isWeekMark ? 700 : 400;
+    const color = isWeekMark ? 'var(--text-secondary)' : 'var(--text-muted)';
+    ticks += `<span style="position:absolute; left:${(d/total*100).toFixed(2)}%; top:2px; font-size:${size}; font-weight:${weight}; color:${color};">${d}</span>`;
+  }
+  const todayDate = new Date(); todayDate.setHours(0,0,0,0);
+  const sD = startDate(); sD.setHours(0,0,0,0);
+  const todayDaysRaw = (todayDate - sD)/86400000;
+  const todayDaysClamped = Math.max(0, Math.min(total, todayDaysRaw));
+  const tp = (total>0 ? (todayDaysClamped/total*100) : 0).toFixed(2);
+  let todayLabel = '▼ Today';
+  let chip = `Today: ${fmtD(todayDate)}`;
+  if(todayDaysRaw < 0){ todayLabel = '▼ Today (before start)'; chip += ' · before project start'; }
+  else if(todayDaysRaw > total){ todayLabel = '▼ Today (past buffer)'; chip += ' · past promised delivery'; }
+  else { chip += ' · day '+fmt(todayDaysRaw); }
+  ticks += `<span style="position:absolute; left:${tp}%; top:-15px; transform:translateX(-50%); font-size:9.5px; font-weight:700; color:var(--today); white-space:nowrap;">${todayLabel}</span>`;
+  setT('ruler-track', ticks);
+  setT('today-chip', chip);
+  document.querySelectorAll('.todayline').forEach(el => { el.style.display='block'; el.style.left = tp+'%'; });
+
+  criticalTasks.forEach((t,i) => {
+    const pc = phaseColor('crit',i);
+    setBar('bar-crit-'+i, t.start, t.duration, total);
+    setBarTitle('bar-crit-'+i, t.start, t.end);
+    setBarTitle('lbl-crit-'+i, t.start, t.end);
+    colorBar('bar-crit-'+i, isDelayed(t), pc.base);
+    setProgress('prog-crit-'+i, t.pct, isDelayed(t) ? '#E0AE1A' : pc.base);
+    setBarLabel('lbl-crit-'+i, t.start, t.start+t.duration, total, barLabelHtml(t, hasSub(t)));
+    {
+      const bufAmt = safetyBuf(t, false);
+      const bufEl = document.getElementById('bar-critbuf-'+i);
+      if(bufEl){
+        if(bufAmt>0){ bufEl.style.display='block'; setBar('bar-critbuf-'+i, Math.max(0,t.start-bufAmt), bufAmt, total); }
+        else { bufEl.style.display='none'; }
+      }
+    }
+    setT('lpd-crit-'+i, fmtD(dateAt(t.start)));
+    setT('lpf-crit-'+i, fmtD(dateAt(t.end)));
+    setT('ldl-crit-'+i, delayHtml(t));
+    setT('lvr-crit-'+i, varHtml(t));
+    setT('lrel-crit-'+i, predsLabelText('crit',i,t));
+    setT('lfeeds-crit-'+i, predsSummaryNames('crit',i,t));
+    setT('gdoer-crit-'+i, escHtml(t.owner||''));
+    if(hasSub(t)){
+      setT('gdur-crit-'+i, fmt(t.duration));
+      setT('gpct-crit-'+i, fmt(t.pct||0));
+      setT('lpct-crit-'+i, fmt(t.pct||0)+'%');
+      setT('ldur-crit-'+i, fmt(t.duration));
+      setT('lplan-crit-'+i, (Number(t.plan)||0).toLocaleString('en-IN'));
+      setT('lact-crit-'+i, t.act===''?'—':(Number(t.act)||0).toLocaleString('en-IN'));
+      setT('ladate-crit-'+i, t.adate ? fmtD(new Date(t.adate+'T00:00:00')) : 'In progress');
+      t.subtasks.forEach((st,si) => {
+        setBar(`bar-crit-${i}-s-${si}`, st.start, st.duration, total);
+        setBarTitle(`bar-crit-${i}-s-${si}`, st.start, st.end);
+        setBarTitle(`lbl-crit-${i}-s-${si}`, st.start, st.end);
+        colorBar(`bar-crit-${i}-s-${si}`, isDelayed(st), pc.light);
+        setProgress(`prog-crit-${i}-s-${si}`, st.pct, isDelayed(st) ? '#E0AE1A' : pc.light);
+        setBarLabel(`lbl-crit-${i}-s-${si}`, st.start, st.start+st.duration, total, barLabelHtml(st));
+        {
+          const subBufAmt = safetyBuf(st, false);
+          const subBufEl = document.getElementById(`bar-critbuf-${i}-s-${si}`);
+          if(subBufEl){
+            if(subBufAmt>0){ subBufEl.style.display='block'; setBar(`bar-critbuf-${i}-s-${si}`, Math.max(0,st.start-subBufAmt), subBufAmt, total); }
+            else { subBufEl.style.display='none'; }
+          }
+        }
+        setT(`lpd-crit-${i}-s-${si}`, fmtD(dateAt(st.start)));
+        setT(`lpf-crit-${i}-s-${si}`, fmtD(dateAt(st.end)));
+        setT(`ldl-crit-${i}-s-${si}`, delayHtml(st));
+        setT(`lvr-crit-${i}-s-${si}`, varHtml(st));
+        setT(`gdoer-crit-${i}-s-${si}`, escHtml(st.owner||''));
+      });
+    }
+  });
+  // chainSum is already the LATEST finish across all critical tasks (Math.max of every t.end) —
+  // NOT necessarily the last array entry, since tasks can point at an arbitrary predecessor
+  // (e.g. "2FS", "1FS") rather than always chaining strictly in array order.
+  setBar('bar-buf-completion', chainSum, completionBuffer, total);
+  setT('lpd-cbuf', fmtD(dateAt(chainSum)));
+  setT('lpf-cbuf', fmtD(dateAt(total)));
+  setT('ldur-cbuf', fmt(completionBuffer));
+
+  feedingChains.forEach((fc,ci) => {
+    const t = fc.tasks[0];
+    const pcf = phaseColor('feed',ci);
+    setBar('bar-feed-'+ci, Math.max(t.start,0), t.duration, total);
+    setBarTitle('bar-feed-'+ci, Math.max(t.start,0), t.end);
+    setBarTitle('lbl-feed-'+ci, Math.max(t.start,0), t.end);
+    colorBar('bar-feed-'+ci, isDelayed(t), pcf.base);
+    setProgress('prog-feed-'+ci, t.pct, isDelayed(t) ? '#E0AE1A' : pcf.base);
+    setBarLabel('lbl-feed-'+ci, Math.max(t.start,0), Math.max(t.start,0)+t.duration, total, barLabelHtml(t, hasSub(t)));
+    {
+      const bufAmt = safetyBuf(t, true);
+      const bufEl = document.getElementById('bar-feedbuf-'+ci);
+      if(bufEl){
+        if(bufAmt>0){ bufEl.style.display='block'; setBar('bar-feedbuf-'+ci, Math.max(0,t.start-bufAmt), bufAmt, total); }
+        else { bufEl.style.display='none'; }
+      }
+    }
+    setT('lfeeds-feed-'+ci, predsSummaryNames('feed',ci,t));
+    setT('lpd-feed-'+ci, fmtD(dateAt(t.start)));
+    setT('lpf-feed-'+ci, fmtD(dateAt(t.end)));
+    setT('ldl-feed-'+ci, delayHtml(t));
+    setT('lvr-feed-'+ci, varHtml(t));
+    setT('lrel-feed-'+ci, predsLabelText('feed',ci,t));
+    setT('gdoer-feed-'+ci, escHtml(t.owner||''));
+    if(hasSub(t)){
+      setT('gdur-feed-'+ci, fmt(t.duration));
+      setT('gpct-feed-'+ci, fmt(t.pct||0));
+      setT('lpct-feed-'+ci, fmt(t.pct||0)+'%');
+      setT('ldur-feed-'+ci, fmt(t.duration));
+      setT('lplan-feed-'+ci, (Number(t.plan)||0).toLocaleString('en-IN'));
+      setT('lact-feed-'+ci, t.act===''?'—':(Number(t.act)||0).toLocaleString('en-IN'));
+      setT('ladate-feed-'+ci, t.adate ? fmtD(new Date(t.adate+'T00:00:00')) : 'In progress');
+      t.subtasks.forEach((st,si) => {
+        setBar(`bar-feed-${ci}-s-${si}`, Math.max(st.start,0), st.duration, total);
+        setBarTitle(`bar-feed-${ci}-s-${si}`, Math.max(st.start,0), st.end);
+        setBarTitle(`lbl-feed-${ci}-s-${si}`, Math.max(st.start,0), st.end);
+        colorBar(`bar-feed-${ci}-s-${si}`, isDelayed(st), pcf.light);
+        setProgress(`prog-feed-${ci}-s-${si}`, st.pct, isDelayed(st) ? '#E0AE1A' : pcf.light);
+        setBarLabel(`lbl-feed-${ci}-s-${si}`, Math.max(st.start,0), Math.max(st.start,0)+st.duration, total, barLabelHtml(st));
+        {
+          const subBufAmt = safetyBuf(st, true);
+          const subBufEl = document.getElementById(`bar-feedbuf-${ci}-s-${si}`);
+          if(subBufEl){
+            if(subBufAmt>0){ subBufEl.style.display='block'; setBar(`bar-feedbuf-${ci}-s-${si}`, Math.max(0,st.start-subBufAmt), subBufAmt, total); }
+            else { subBufEl.style.display='none'; }
+          }
+        }
+        setT(`lpd-feed-${ci}-s-${si}`, fmtD(dateAt(st.start)));
+        setT(`lpf-feed-${ci}-s-${si}`, fmtD(dateAt(st.end)));
+        setT(`ldl-feed-${ci}-s-${si}`, delayHtml(st));
+        setT(`lvr-feed-${ci}-s-${si}`, varHtml(st));
+        setT(`gdoer-feed-${ci}-s-${si}`, escHtml(st.owner||''));
+      });
+    }
+  });
+
+  setT('tot-plan', planTot.toLocaleString('en-IN'));
+  setT('tot-act', actTot.toLocaleString('en-IN'));
+  setT('tot-var', `<span style="color:${varTot>0?'var(--red)':'var(--green)'};">${money(varTot)}</span>`);
+
+  renderLookahead();
+  renderDaily();
+  renderReadiness();
+  patchVendors();
+  renderVendorSuggestions();
+  renderStats();
+  renderUndoRedoState();
+  drawDependencyArrows();
+  fixLabelOverlaps();
+  scheduleSnapshot();
+  renderSyncStatus();
+  scheduleAutoSync();
+  scheduleLocalSave();
+}
+
+function taskStatus(t, winStart, winEnd, today){
+  const ps = dateAt(t.start), pf = dateAt(t.end);
+  if(t.adate) return {label:'Done', color:'var(--green)'};
+  if(pf < today) return {label:'Overdue', color:'var(--red)'};
+  if(ps <= today && pf >= today) return {label:'In progress', color:'var(--amber)'};
+  if(ps >= today && ps <= winEnd) return {label:'Starts in window', color:'var(--text-secondary)'};
+  return {label:'Due in window', color:'var(--text-secondary)'};
+}
+function dailyStatus(t, today){
+  const ps = dateAt(t.start), pf = dateAt(t.end);
+  if(t.adate) return {label:'Done', color:'var(--green)'};
+  if(pf < today) return {label:'Overdue', color:'var(--red)'};
+  if(ps <= today && pf >= today) return {label:'In progress', color:'var(--amber)'};
+  return {label:'Not started', color:'var(--text-secondary)'};
+}
+function followOwner(t, today){
+  return dailyStatus(t, today).label === 'Overdue' ? 'pc' : 'ea';
+}
+
+function lookaheadRows(){
+  const from = new Date(); from.setHours(0,0,0,0);
+  lookahead.from = from.toISOString().slice(0,10);
+  const winEnd = new Date(from); winEnd.setDate(winEnd.getDate() + (Number(lookahead.days)||3));
+  const rows = [];
+  function consider(kind,i,t,si){
+    const ps = dateAt(t.start), pf = dateAt(t.end);
+    const overdueUnfinished = !t.adate && pf < from;
+    if((ps <= winEnd && pf >= from) || overdueUnfinished){ rows.push({t, kind, i, si, type: kind==='crit'?'Critical':'Feeding', color: kind==='crit'?'#D85A30':'#0F6E56', overdue: overdueUnfinished}); }
+  }
+  criticalTasks.forEach((t,i) => {
+    if(hasSub(t)) t.subtasks.forEach((st,si)=>consider('crit',i,st,si));
+    else consider('crit',i,t,null);
+  });
+  feedingChains.forEach((fc,ci) => {
+    const t = fc.tasks[0];
+    if(hasSub(t)) t.subtasks.forEach((st,si)=>consider('feed',ci,st,si));
+    else consider('feed',ci,t,null);
+  });
+  rows.sort((a,b) => dateAt(a.t.start) - dateAt(b.t.start));
+  return {rows, from, winEnd};
+}
+
+// unique id for a look-ahead Gantt bar, shared by the renderer and the dependency-arrow drawer.
+function lhBarId(kind,i,si){ return `lh-bar-${kind}-${i}-${(si===null||si===undefined)?'x':si}`; }
+// which look-ahead bars connect to which, and via what relation — same rule the main Gantt tab
+// uses (preds-based, possibly multiple predecessors per task) plus one extra case the main Gantt
+// doesn't need: consecutive sub-tasks of the same phase, since here they're shown as flat rows
+// rather than grouped under their phase's own bar. Only connects pairs where BOTH ends actually
+// fall inside the current window (i.e. both have a row here).
+function lookaheadDependencyConnections(rows){
+  const keyOf = (kind,i,si) => `${kind}-${i}-${(si===null||si===undefined)?'x':si}`;
+  const present = new Set(rows.map(r => keyOf(r.kind, r.i, r.si)));
+  const conns = [];
+  const nCrit = criticalTasks.length;
+  function globalKeyOf(gIdx){ return gIdx<nCrit ? keyOf('crit',gIdx,null) : keyOf('feed',gIdx-nCrit,null); }
+  rows.forEach(r => {
+    const {kind, i, si} = r;
+    if(si===null || si===undefined){
+      const isFeed = kind==='feed';
+      const gIdx = isFeed ? nCrit+i : i;
+      const t = isFeed ? feedingChains[i].tasks[0] : criticalTasks[i];
+      const tgtKey = keyOf(kind,i,null);
+      const parsed = parsePreds(t.preds);
+      if(!parsed.length || (parsed.length===1 && parsed[0].num===null)){
+        const rel = parsed.length ? parsed[0].rel : 'FS';
+        const aboveIdx = aboveGlobalIndex(gIdx, isFeed, nCrit);
+        if(aboveIdx!==null){ const srcKey = globalKeyOf(aboveIdx); if(present.has(srcKey)) conns.push({srcKey, tgtKey, rel}); }
+      } else {
+        parsed.forEach(p => {
+          if(!p.num) return;
+          const pIdx = p.num-1;
+          if(pIdx<0 || pIdx===gIdx) return;
+          const srcKey = globalKeyOf(pIdx);
+          if(present.has(srcKey)) conns.push({srcKey, tgtKey, rel:p.rel});
+        });
+      }
+    } else if(si>0){
+      const srcKey = keyOf(kind, i, si-1);
+      if(present.has(srcKey)) conns.push({srcKey, tgtKey:keyOf(kind,i,si), rel:'FS'});
+    }
+  });
+  return conns;
+}
+// draws the elbow-connector arrows between look-ahead bars, mirroring drawDependencyArrows() on
+// the main Gantt tab but scoped to lh-gantt-wrap / lh-dep-svg and lookaheadDependencyConnections().
+function drawLookaheadDependencyArrows(rows){
+  const svg = document.getElementById('lh-dep-svg');
+  const wrap = document.getElementById('lh-gantt-wrap');
+  const rowsEl = document.getElementById('lh-gantt-rows');
+  if(!svg || !wrap || !rowsEl || typeof wrap.getBoundingClientRect !== 'function') return;
+  const w = rowsEl.scrollWidth || wrap.scrollWidth || 0;
+  const h = rowsEl.scrollHeight || wrap.scrollHeight || 0;
+  svg.setAttribute('width', w);
+  svg.setAttribute('height', h);
+  svg.style.width = w+'px';
+  svg.style.height = h+'px';
+  const wrapRect = wrap.getBoundingClientRect();
+  function anchor(elId, side){
+    const el = document.getElementById(elId);
+    if(!el || typeof el.getBoundingClientRect !== 'function') return null;
+    const r = el.getBoundingClientRect();
+    if(!r || (r.width===0 && r.height===0)) return null;
+    const y = (r.top - wrapRect.top) + r.height/2;
+    const x = (side==='left') ? (r.left - wrapRect.left) : (r.right - wrapRect.left);
+    return {x,y};
+  }
+  let paths = '';
+  lookaheadDependencyConnections(rows).forEach(({srcKey,tgtKey,rel}) => {
+    const [sSide,tSide] = relAnchorSides(rel);
+    const s = anchor('lh-bar-'+srcKey, sSide);
+    const t = anchor('lh-bar-'+tgtKey, tSide);
+    if(!s || !t) return;
+    const d = elbowPath(s, t, tSide);
+    paths += `<path d="${d}" style="stroke:#ec4899; stroke-width:1.4; stroke-dasharray:0.7,2.8; stroke-linecap:round; fill:none;" marker-end="url(#lh-dep-arrowhead)"></path>`;
+  });
+  svg.innerHTML = `<defs><marker id="lh-dep-arrowhead" markerWidth="6.3" markerHeight="6.3" refX="4.9" refY="2.45" orient="auto"><path d="M0,0 L4.9,2.45 L0,4.9 Z" style="fill:#ec4899;"></path></marker></defs>${paths}`;
+}
+// a compact Gantt chart scoped to just the look-ahead window (today → today+N days), shown
+// below the task table. Bars are clamped to the window — a task that started earlier (carried
+// over) or finishes later just shows the slice that falls inside these N days. Each row also
+// shows its Rel (FS/SS/FF/SF, same notation as the main Gantt tab) and, where the related task
+// is also inside the window, a dependency arrow linking the two bars.
+function renderLookaheadGantt(rows, from, winEnd){
+  const winDays = Math.max(1, Number(lookahead.days)||3);
+  const today = new Date(); today.setHours(0,0,0,0);
+  let ruler = `<div style="display:flex; margin-bottom:6px;">
+    <div style="width:230px; flex-shrink:0;"></div>
+    <div style="flex:1; display:flex;">`;
+  for(let d=0; d<winDays; d++){
+    const dayDate = new Date(from.getTime() + d*86400000);
+    const isToday = dayDate.getTime()===today.getTime();
+    ruler += `<div style="flex:1; text-align:center; font-size:10.5px; font-weight:${isToday?700:400}; color:${isToday?'var(--today)':'var(--text-muted)'}; border-left:0.5px solid var(--border); padding:2px 0;">${fmtD(dayDate)}${isToday?' <span style="font-size:9px;">(today)</span>':''}</div>`;
+  }
+  ruler += `</div></div>`;
+
+  if(!rows.length){
+    return `<div style="overflow-x:auto;"><div style="min-width:600px;">${ruler}<p style="font-size:12px; color:var(--text-muted); margin-top:8px;">No tasks fall inside this window.</p></div></div>`;
+  }
+
+  const body = rows.map(({t, kind, i, si, type, color, overdue}) => {
+    const taskStartDate = dateAt(t.start), taskEndDate = dateAt(t.end);
+    const startOffset = Math.floor((taskStartDate - from)/86400000);
+    const endOffset = Math.ceil((taskEndDate - from)/86400000);
+    const clampedStart = Math.max(0, startOffset);
+    const clampedEnd = Math.min(winDays, Math.max(clampedStart+1, endOffset));
+    const leftPct = (clampedStart/winDays*100).toFixed(2);
+    const widthPct = ((clampedEnd-clampedStart)/winDays*100).toFixed(2);
+    const barColor = overdue ? 'var(--delayed)' : color;
+    const bufAmt = safetyBuf(t);
+    const isTop = (si===null || si===undefined);
+    // sub-tasks always chain sequentially (FS) within their own phase — no SS/FF/SF for them —
+    // so their rel label is just "FS", optionally with their own buffer noted.
+    const relText = isTop ? predsLabelText(kind,i,t) : (bufAmt>0 ? `FS +${fmt(bufAmt)}d` : 'FS');
+    return `<div style="display:flex; align-items:center; margin-bottom:5px; height:24px;">
+      <div style="width:230px; flex-shrink:0; display:flex; align-items:center; gap:5px; font-size:11.5px; padding-right:8px; overflow:hidden;" title="${escHtml(t.name)} — ${fmtD(taskStartDate)} to ${fmtD(taskEndDate)}${bufAmt>0?' (has a '+fmt(bufAmt)+'d safety buffer before it)':''}">
+        <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escHtml(shortName(t.name))}</span>
+        ${overdue?'<span style="color:var(--red); font-size:9.5px; font-weight:700; flex-shrink:0;">(carried over)</span>':''}
+        <span style="font-size:9px; font-weight:700; color:var(--gold); background:rgba(176,141,62,0.16); padding:1px 4px; border-radius:3px; flex-shrink:0; white-space:nowrap;" title="Relation to its predecessor">${relText}</span>
+      </div>
+      <div style="flex:1; position:relative; height:16px; background:var(--surface-1); border-radius:4px;">
+        <div id="${lhBarId(kind,i,si)}" style="position:absolute; top:0; bottom:0; left:${leftPct}%; width:${widthPct}%; background:${barColor}; border-radius:4px; display:flex; align-items:center; padding:0 6px; overflow:hidden;" title="${fmt(t.pct||0)}% complete">
+          <span style="font-size:9.5px; color:#fff; font-weight:600; white-space:nowrap;">${fmt(t.pct||0)}%</span>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+
+  return `<div style="overflow-x:auto;"><div id="lh-gantt-wrap" style="position:relative; min-width:600px;"><div id="lh-gantt-rows">${ruler}${body}</div><svg id="lh-dep-svg" style="position:absolute; top:0; left:0; overflow:visible; pointer-events:none; z-index:1;"></svg></div></div>`;
+}
+function renderLookahead(){
+  const {rows, from, winEnd} = lookaheadRows();
+  const dEl = document.getElementById('lh-date'); if(dEl) dEl.textContent = fmtD(from);
+  const nEl = document.getElementById('lh-days'); if(nEl) nEl.value = lookahead.days;
+  const today = new Date(); today.setHours(0,0,0,0);
+  const ocell = (t,path) => `<input type="text" value="${(t.owner||'').replace(/"/g,'&quot;')}" placeholder="Assign to" oninput="${path}.owner=this.value; scheduleAutoSync();" style="width:110px; font-size:11.5px; height:25px;">`;
+  const ncell = (t,path) => `<input type="text" value="${(t.notes||'').replace(/"/g,'&quot;')}" placeholder="Follow-up note" oninput="${path}.notes=this.value; scheduleAutoSync();" style="width:220px; font-size:11.5px; height:25px;">`;
+  // small buttons to the checklist/FMS links that must be worked through before this task is
+  // marked done — dimmed when no link has been set yet for that category.
+  const clcell = (t,path) => {
+    const mk = (field, icon, label, ready) => `<button class="iconbtn" onclick="openLink(${path},'${field}')" title="${t[field] ? label+': '+t[field] : 'No '+label.toLowerCase()+' link set (add one in the Readiness tab)'}" style="${t[field] ? '' : 'opacity:0.3;'} ${ready?'border-color:var(--green);':''}"><i class="ti ti-${icon}" style="font-size:11px;"></i></button>`;
+    return `<div style="display:flex; gap:3px;">${mk('infoLink','file-text','Drawings',t.infoReady)}${mk('materialLink','package','Material (MR)',t.materialReady)}${mk('labourLink','users','Labour (contractor form)',t.labourReady)}</div>`;
+  };
+  let html = '';
+  rows.forEach(({t, kind, i, si, type, color, overdue}) => {
+    const s = taskStatus(t, from, winEnd, today);
+    const path = taskPath(kind, i, si);
+    html += `<tr${overdue ? ' style="background:rgba(163,45,45,0.07);"' : ''}>
+      <td class="l">${t.name}${overdue ? ' <span style="font-size:10px; color:var(--red); font-weight:700;">(carried over)</span>' : ''}</td>
+      <td class="l"><span style="color:${color}; font-weight:600; font-size:11px;">${type}</span></td>
+      <td>${fmtD(dateAt(t.start))}</td>
+      <td>${fmtD(dateAt(t.end))}</td>
+      <td class="l"><span style="color:${s.color}; font-weight:600; font-size:11.5px;">${s.label}</span></td>
+      <td class="l" style="padding-left:8px;">${ocell(t,path)}</td>
+      <td class="l" style="padding-left:8px;">${ncell(t,path)}</td>
+      <td class="l" style="padding-left:8px;">${clcell(t,path)}</td>
+    </tr>`;
+  });
+  setT('lhrows', html);
+  const empty = document.getElementById('lh-empty');
+  if(empty) empty.style.display = rows.length ? 'none' : 'block';
+  setT('lh-gantt', renderLookaheadGantt(rows, from, winEnd));
+  drawLookaheadDependencyArrows(rows);
+}
+function copyLookahead(){
+  const {rows, from, winEnd} = lookaheadRows();
+  const today = new Date(); today.setHours(0,0,0,0);
+  let txt = `${meta.name||'Project'} — 3 days planning (${fmtD(from)} to ${fmtD(winEnd)})\n\n`;
+  if(!rows.length){ txt += 'No tasks fall in this window.'; }
+  rows.forEach(({t, overdue}) => {
+    const s = taskStatus(t, from, winEnd, today);
+    txt += `• ${t.name}${overdue ? ' [CARRIED OVER — not done]' : ''}\n   ${fmtD(dateAt(t.start))} → ${fmtD(dateAt(t.end))} · ${s.label}${t.owner?' · Owner: '+t.owner:''}${t.notes?' · Note: '+t.notes:''}\n`;
+  });
+  navigator.clipboard.writeText(txt).then(() => alert('Copied — paste into WhatsApp or email.'))
+    .catch(() => alert('Could not copy automatically. Select the table and copy manually.'));
+}
+
+function dailyRows(dateStr){
+  const day = new Date((dateStr||daily.date)+'T00:00:00');
+  const rows = [];
+  function consider(kind,i,t,si){
+    const ps = dateAt(t.start), pf = dateAt(t.end);
+    const psD = new Date(ps.getFullYear(),ps.getMonth(),ps.getDate());
+    const pfD = new Date(pf.getFullYear(),pf.getMonth(),pf.getDate());
+    const active = psD<=day && pfD>=day;
+    // carried over: not marked done, and was already meant to finish before this date — still needs attention today
+    const overdue = !t.adate && pfD<day;
+    if(active || overdue){ rows.push({t, kind, i, si, type: kind==='crit'?'Critical':'Feeding', color: kind==='crit'?'#D85A30':'#0F6E56', overdue}); }
+  }
+  criticalTasks.forEach((t,i) => { if(hasSub(t)) t.subtasks.forEach((st,si)=>consider('crit',i,st,si)); else consider('crit',i,t,null); });
+  feedingChains.forEach((fc,ci) => { const t=fc.tasks[0]; if(hasSub(t)) t.subtasks.forEach((st,si)=>consider('feed',ci,st,si)); else consider('feed',ci,t,null); });
+  rows.sort((a,b) => (b.overdue - a.overdue) || (dateAt(a.t.end) - dateAt(b.t.end)));
+  return rows;
+}
+
+function dailyRowHtml(r){
+  const {t, kind, i, si, type, color, overdue} = r;
+  const path = taskPath(kind, i, si);
+  const today = new Date(); today.setHours(0,0,0,0);
+  const s = dailyStatus(t, today);
+  const follow = followOwner(t, today);
+  const supervisorDefault = (meta.team.ss && meta.team.ss.name) || '';
+  const supervisorVal = t.owner || supervisorDefault;
+  const followBadge = follow==='pc'
+    ? `<span class="badge-pc" style="margin-left:0;">Process coordinator</span>`
+    : `<span style="font-size:9px; font-weight:700; color:var(--navy); background:rgba(22,34,46,0.08); padding:1px 5px; border-radius:4px; white-space:nowrap;">EA follow-up</span>`;
+  const overdueBadge = overdue ? ` <span style="font-size:10px; color:var(--red); font-weight:700;">(carried over — was due ${fmtD(dateAt(t.end))})</span>` : '';
+  return `<div style="display:flex; align-items:center; gap:8px; padding:5px 6px; border-bottom:0.5px solid var(--border); flex-wrap:wrap; ${overdue ? 'background:rgba(163,45,45,0.07);' : ''}">
+    <div style="flex:1; min-width:180px; font-size:12.5px;">${t.name} <span style="color:${color}; font-size:10px; font-weight:600;">(${type})</span>${overdueBadge}</div>
+    <span style="font-size:11.5px; font-weight:600; color:${s.color};">${s.label}</span>
+    <input type="text" value="${supervisorVal.replace(/"/g,'&quot;')}" placeholder="Site supervisor" oninput="${path}.owner=this.value; scheduleAutoSync();" style="width:130px; font-size:11.5px; height:26px;">
+    ${followBadge}
+    <select onchange="${path}.shift=this.value; update();" style="width:120px; font-size:11.5px; height:26px;">
+      <option value="1" ${t.shift==='1'?'selected':''}>First half</option>
+      <option value="2" ${t.shift==='2'?'selected':''}>Second half</option>
+      <option value="" ${(t.shift===''||t.shift==null)?'selected':''}>Full day</option>
+    </select>
+    <input type="text" value="${(t.notes||'').replace(/"/g,'&quot;')}" placeholder="Note" oninput="${path}.notes=this.value; scheduleAutoSync();" style="width:170px; font-size:11.5px; height:26px;">
+  </div>`;
+}
+
+function renderDaily(){
+  const dEl = document.getElementById('dd-date'); if(dEl) dEl.value = daily.date;
+  const sEl = document.getElementById('dd-start'); if(sEl) sEl.value = meta.dayStart;
+  const rows = dailyRows(daily.date);
+  const gOverdue = rows.filter(r=>r.overdue);
+  const active = rows.filter(r=>!r.overdue);
+  const g1 = active.filter(r=>r.t.shift==='1');
+  const g2 = active.filter(r=>r.t.shift==='2');
+  const g0 = active.filter(r=>!r.t.shift);
+  const shift1 = `${meta.dayStart} – ${addTime(meta.dayStart,4)}`;
+  const shift2 = `${addTime(meta.dayStart,4)} – ${addTime(meta.dayStart,8)}`;
+  let html = `<div style="font-size:12.5px; color:var(--text-secondary); margin-bottom:6px;">${active.length} task(s) active on ${fmtD(new Date(daily.date+'T00:00:00'))}${gOverdue.length ? ` · <span style="color:var(--red); font-weight:600;">${gOverdue.length} carried over from earlier</span>` : ''}</div>`;
+  if(gOverdue.length){
+    html += `<div class="shift-head" style="color:var(--red);">Overdue / carried over — needs attention today</div>`;
+    html += gOverdue.map(dailyRowHtml).join('');
+  }
+  html += `<div class="shift-head">First half · ${shift1}</div>`;
+  html += g1.length ? g1.map(dailyRowHtml).join('') : `<p style="font-size:12px; color:var(--text-muted); margin:4px 0;">No tasks assigned yet.</p>`;
+  html += `<div class="shift-head">Second half · ${shift2}</div>`;
+  html += g2.length ? g2.map(dailyRowHtml).join('') : `<p style="font-size:12px; color:var(--text-muted); margin:4px 0;">No tasks assigned yet.</p>`;
+  if(g0.length){
+    html += `<div class="shift-head">Unassigned / full day</div>`;
+    html += g0.map(dailyRowHtml).join('');
+  }
+  setT('daily-body', html);
+}
+function copyDaily(){
+  const rows = dailyRows(daily.date);
+  const today = new Date(); today.setHours(0,0,0,0);
+  const shift1 = `${meta.dayStart} – ${addTime(meta.dayStart,4)}`;
+  const shift2 = `${addTime(meta.dayStart,4)} – ${addTime(meta.dayStart,8)}`;
+  const line = r => { const s=dailyStatus(r.t,today); const followVal=followOwner(r.t,today);
+    return `• ${r.t.name}${r.overdue ? ' [CARRIED OVER — was due '+fmtD(dateAt(r.t.end))+']' : ''} — ${s.label}${r.t.owner?' · Site supervisor: '+r.t.owner:''} · Follow-up: ${followVal==='pc'?'Process coordinator':'EA'}${r.t.notes?' · Note: '+r.t.notes:''}`; };
+  const gOverdue = rows.filter(r=>r.overdue);
+  const active = rows.filter(r=>!r.overdue);
+  let txt = `${meta.name||'Project'} — Daily follow-up (${fmtD(new Date(daily.date+'T00:00:00'))})\n\n`;
+  if(gOverdue.length){ txt += `OVERDUE / CARRIED OVER\n` + gOverdue.map(line).join('\n') + '\n\n'; }
+  txt += `FIRST HALF (${shift1})\n` + (active.filter(r=>r.t.shift==='1').map(line).join('\n') || 'No tasks assigned.') + '\n\n';
+  txt += `SECOND HALF (${shift2})\n` + (active.filter(r=>r.t.shift==='2').map(line).join('\n') || 'No tasks assigned.') + '\n';
+  const g0 = active.filter(r=>!r.t.shift);
+  if(g0.length){ txt += `\nUNASSIGNED / FULL DAY\n` + g0.map(line).join('\n') + '\n'; }
+  navigator.clipboard.writeText(txt).then(() => alert('Copied — paste into WhatsApp or email.'))
+    .catch(() => alert('Could not copy automatically.'));
+}
+
+function readinessRows(){
+  const today = new Date(); today.setHours(0,0,0,0);
+  const winEnd = new Date(today); winEnd.setDate(winEnd.getDate() + (Number(readiness_.days)||7));
+  const rows = [];
+  function consider(kind,i,t,si){
+    if(t.adate) return;
+    const ps = dateAt(t.start);
+    const psD = new Date(ps.getFullYear(),ps.getMonth(),ps.getDate());
+    if(psD >= today && psD <= winEnd){ rows.push({t, kind, i, si, type: kind==='crit'?'Critical':'Feeding', color: kind==='crit'?'#D85A30':'#0F6E56', psD}); }
+  }
+  criticalTasks.forEach((t,i) => { if(hasSub(t)) t.subtasks.forEach((st,si)=>consider('crit',i,st,si)); else consider('crit',i,t,null); });
+  feedingChains.forEach((fc,ci) => { const t=fc.tasks[0]; if(hasSub(t)) t.subtasks.forEach((st,si)=>consider('feed',ci,st,si)); else consider('feed',ci,t,null); });
+  rows.sort((a,b)=>a.psD-b.psD);
+  return {rows, today, winEnd};
+}
+function readinessStatus(t, psD, today){
+  const allReady = t.infoReady && t.materialReady && t.labourReady;
+  const daysToStart = Math.round((psD-today)/86400000);
+  if(allReady) return {label:'Ready', color:'var(--green)'};
+  if(daysToStart<=2) return {label:'At risk — arrange now', color:'var(--red)'};
+  return {label:'Pending', color:'var(--text-secondary)'};
+}
+function rdCheck(checked, path, field){
+  return `<input type="checkbox" ${checked?'checked':''} onchange="${path}.${field}=this.checked; update();" style="width:16px; height:16px; cursor:pointer;">`;
+}
+// the three readiness gates, each with its own placeholder and tick-tooltip — the labels the site
+// team actually uses: Drawings (GFC / shop drawing issued), Material (MR raised, approved and
+// received) and Labour (contractor confirms manpower is available and flags any issue, via a
+// Google Form the FMS runs off).
+const RD_META = {
+  infoLink:     {ph:'Drawing / GFC link',        tip:'Tick once the GFC / shop drawing for this task is issued, current revision, and on site'},
+  materialLink: {ph:'MR link',                   tip:'Paste the material request (MR) link. Tick only once the MR is raised, approved and the material is received and tallied at site'},
+  labourLink:   {ph:'Labour Google Form / FMS',  tip:'PC asks the labour contractor: is manpower for this specific work available, and is he facing any issue? Paste the Google Form link the contractor fills — the FMS runs off its responses. Tick only on a confirmed "available, no issues"'}
+};
+// pairs a readiness checkbox with its link — the link is what has to be opened and worked through
+// before that box gets ticked.
+function rdLinkCell(t, path, linkField, checkField){
+  const val = t[linkField] || '';
+  const m = RD_META[linkField] || {ph:'Checklist / FMS link', tip:'Mark ready'};
+  return `<div style="display:flex; align-items:center; gap:4px;">
+    <input type="checkbox" ${t[checkField]?'checked':''} onchange="${path}.${checkField}=this.checked; update();" title="${m.tip}" style="width:15px; height:15px; cursor:pointer; flex-shrink:0;">
+    <input type="text" value="${String(val).replace(/"/g,'&quot;')}" oninput="${path}.${linkField}=this.value; scheduleAutoSync();" placeholder="${m.ph}" title="${m.tip}" style="width:118px; font-size:10px; height:22px;">
+    <button class="iconbtn" onclick="openLink(${path},'${linkField}')" title="${val ? 'Open: '+val : 'No link set'}" style="${val ? '' : 'opacity:0.35;'}"><i class="ti ti-external-link" style="font-size:11px;"></i></button>
+  </div>`;
+}
+function renderReadiness(){
+  const dEl = document.getElementById('rd-days'); if(dEl) dEl.value = readiness_.days;
+  const {rows, today} = readinessRows();
+  let atRisk = 0;
+  let html = '';
+  rows.forEach(({t,kind,i,si,type,color,psD}) => {
+    const path = taskPath(kind,i,si);
+    const s = readinessStatus(t, psD, today);
+    if(s.label.indexOf('At risk')===0) atRisk++;
+    const daysToStart = Math.round((psD-today)/86400000);
+    html += `<tr>
+      <td class="l">${t.name}</td>
+      <td class="l"><span style="color:${color}; font-weight:600; font-size:11px;">${type}</span></td>
+      <td>${fmtD(psD)}</td>
+      <td class="l" style="color:var(--text-muted); font-size:11px;">${daysToStart<=0?'today / overdue':daysToStart+' d'}</td>
+      <td class="l">${rdLinkCell(t, path, 'infoLink', 'infoReady')}</td>
+      <td class="l">${rdLinkCell(t, path, 'materialLink', 'materialReady')}</td>
+      <td class="l">${rdLinkCell(t, path, 'labourLink', 'labourReady')}</td>
+      <td class="l"><span style="color:${s.color}; font-weight:600; font-size:11.5px;">${s.label}</span></td>
+    </tr>`;
+  });
+  setT('rdrows', html);
+  const empty = document.getElementById('rd-empty');
+  if(empty) empty.style.display = rows.length ? 'none' : 'block';
+  const banner = document.getElementById('rd-banner');
+  if(banner){
+    if(rows.length===0){ banner.textContent=''; }
+    else if(atRisk>0){ banner.textContent = `⚠ ${atRisk} task(s) starting within 2 days are not fully ready — do not start until Drawings, Material (MR) & Labour are all confirmed.`; banner.style.color='var(--red)'; }
+    else { banner.textContent = `All ${rows.length} upcoming task(s) are on track for readiness.`; banner.style.color='var(--green)'; }
+  }
+}
+
+function vendorRowHtml(v,i){
+  return `<tr>
+    <td class="l">${inpText(v.vendor, `vendorPayments[${i}].vendor=this.value;`, 140)}</td>
+    <td class="l">${inpText(v.wo, `vendorPayments[${i}].wo=this.value;`, 100)}</td>
+    <td class="l">${inpText(v.desc, `vendorPayments[${i}].desc=this.value;`, 170)}</td>
+    <td>${inpDate(v.schedDate, `vendorPayments[${i}].schedDate=this.value; update();`, 116)}</td>
+    <td>${inpBud(v.schedAmt, `vendorPayments[${i}].schedAmt=this.value===''?'':(Number(this.value)||0); update();`, 60)}</td>
+    <td class="l" style="padding-left:8px;">${inpDate(v.actDate, `vendorPayments[${i}].actDate=this.value; update();`, 116)}</td>
+    <td>${inpBud(v.actAmt, `vendorPayments[${i}].actAmt=this.value===''?'':(Number(this.value)||0); update();`, 60)}</td>
+    <td id="vvar-${i}"></td>
+    <td class="l" id="vstat-${i}"></td>
+    <td class="l" style="padding-left:8px;">${inpText(v.notes, `vendorPayments[${i}].notes=this.value;`, 140)}</td>
+    <td>${iconBtn('trash', `removeVendorRow(${i})`, 'Remove')}</td>
+  </tr>`;
+}
+function renderVendorRows(){
+  let html = vendorPayments.map(vendorRowHtml).join('');
+  html += `<tr style="font-weight:600; border-top:2px solid var(--border-strong);">
+    <td class="l">Totals</td><td></td><td></td><td></td><td></td>
+    <td id="vtot-sched"></td><td></td><td id="vtot-act"></td><td id="vtot-var"></td><td></td><td></td><td></td>
+  </tr>`;
+  document.getElementById('vrows').innerHTML = html;
+}
+function patchVendors(){
+  const today = new Date(); today.setHours(0,0,0,0);
+  let schedTot=0, actTot=0, varTot=0;
+  vendorPayments.forEach((v,i) => {
+    schedTot += Number(v.schedAmt)||0;
+    let status, color;
+    if(v.actDate){ status='Paid'; color='var(--green)'; actTot += Number(v.actAmt)||0; varTot += (Number(v.actAmt)||0)-(Number(v.schedAmt)||0); }
+    else if(v.schedDate && new Date(v.schedDate+'T00:00:00') < today){ status='Overdue'; color='var(--red)'; }
+    else { status='Pending'; color='var(--text-secondary)'; }
+    setT('vstat-'+i, `<span style="color:${color}; font-weight:600; font-size:11.5px;">${status}</span>`);
+    setT('vvar-'+i, v.actDate ? `<span style="color:${((Number(v.actAmt)||0)-(Number(v.schedAmt)||0))>0?'var(--red)':'var(--green)'}; font-weight:600;">${money((Number(v.actAmt)||0)-(Number(v.schedAmt)||0))}</span>` : '<span style="color:var(--text-muted);">—</span>');
+  });
+  setT('vtot-sched', schedTot.toLocaleString('en-IN'));
+  setT('vtot-act', actTot.toLocaleString('en-IN'));
+  setT('vtot-var', `<span style="color:${varTot>0?'var(--red)':'var(--green)'};">${money(varTot)}</span>`);
+}
+function addVendorRow(){ vendorPayments.push({vendor:'', wo:'', desc:'', schedDate:'', schedAmt:0, actDate:'', actAmt:'', notes:''}); renderVendorRows(); update(); }
+function removeVendorRow(i){ vendorPayments.splice(i,1); renderVendorRows(); update(); }
+// unique vendor names already used anywhere (task assignments + Material & Resource payments),
+// offered as autocomplete suggestions on the Task List "Vendor" field so names stay consistent.
+function vendorSuggestions(){
+  const names = new Set();
+  allLeafTasks().forEach(t => { if(t.vendor) names.add(t.vendor); });
+  vendorPayments.forEach(v => { if(v.vendor) names.add(v.vendor); });
+  return Array.from(names).sort();
+}
+function renderVendorSuggestions(){
+  const dl = document.getElementById('vendor-suggestions');
+  if(!dl) return;
+  dl.innerHTML = vendorSuggestions().map(v => `<option value="${String(v).replace(/"/g,'&quot;')}"></option>`).join('');
+}
+
+function renderTeamRows(){
+  let html = '';
+  teamRoles.forEach(([key,label]) => {
+    const t = meta.team[key];
+    html += `<tr>
+      <td class="l" style="font-weight:600; color:var(--text-secondary);">${label}</td>
+      <td class="l">${inpText(t.name, `meta.team.${key}.name=this.value;`, 180)}</td>
+      <td class="l">${inpText(t.phone, `meta.team.${key}.phone=this.value;`, 130)}</td>
+    </tr>`;
+  });
+  document.getElementById('team-rows').innerHTML = html;
+}
+
+function inpText(value,onInput,width){ return `<input type="text" value="${String(value).replace(/"/g,'&quot;')}" oninput="${onInput} scheduleAutoSync();" style="width:${width}px; flex-shrink:0; font-size:11.5px; height:24px;">`; }
+// name field for a phase (a top-level task with sub-tasks) — displayed in upper case so phases
+// read as headings at a glance, distinct from the sentence-case sub-task names underneath.
+// text-transform is purely visual; the underlying task name text is left as typed.
+function inpTextName(value,onInput,width,isPhase){
+  const extra = isPhase ? 'text-transform:uppercase; font-weight:700; letter-spacing:0.3px;' : '';
+  return `<input type="text" value="${String(value).replace(/"/g,'&quot;')}" oninput="${onInput} scheduleAutoSync();" style="width:${width}px; flex-shrink:0; font-size:11.5px; height:24px; ${extra}">`;
+}
+function inpDur(value,onInput,width){ return `<input type="number" min="1" step="1" value="${value}" oninput="${onInput} scheduleAutoSync();" style="width:${width}px; flex-shrink:0; font-size:11.5px; height:24px;">`; }
+function inpDate(value,onInput,width){ return `<input type="date" value="${value}" onchange="${onInput}" style="width:${width}px; flex-shrink:0; font-size:10.5px; height:24px;">`; }
+function inpBud(value,onInput,width){ return `<input type="number" min="0" step="0.5" value="${value}" oninput="${onInput} scheduleAutoSync();" style="width:${width}px; flex-shrink:0; font-size:11.5px; height:24px; text-align:right;">`; }
+function inpLink(value,path,width){
+  return `<input type="text" value="${String(value||'').replace(/"/g,'&quot;')}" oninput="${path}.link=this.value; scheduleAutoSync();" placeholder="Link" title="Paste a link (drawing, doc, WhatsApp, Drive...)" style="width:${width}px; flex-shrink:0; font-size:10px; height:24px;">`;
+}
+function openLink(t, field){
+  field = field || 'link';
+  if(t && t[field]) window.open(t[field], '_blank');
+}
+// quality-check gate for a single task — a checklist link the project manager opens and works
+// through, then ticks off themselves once satisfied. Every task/sub-task carries its own
+// (qcLink, qcDone), independent of its Info/Material/Labour readiness links.
+function qcCell(t, path){
+  const val = t.qcLink || '';
+  const pending = (Number(t.pct)||0) >= 100 && !t.qcDone;
+  return `<div style="display:flex; align-items:center; gap:4px;" title="${pending ? 'Quality check not yet signed off — this task shows 100% complete but QC is still pending' : ''}">
+    <button class="iconbtn" onclick="openLink(${path},'qcLink')" title="${val ? 'Open QC checklist: '+val : 'No QC checklist link set'}" style="${val ? '' : 'opacity:0.35;'}"><i class="ti ti-clipboard-check" style="font-size:12px;"></i></button>
+    <input type="text" value="${String(val).replace(/"/g,'&quot;')}" oninput="${path}.qcLink=this.value; scheduleAutoSync();" placeholder="Checklist link" style="width:90px; font-size:10px; height:22px;">
+    <input type="checkbox" ${t.qcDone?'checked':''} onchange="${path}.qcDone=this.checked; update();" title="Project manager sign-off — must be ticked before this task's work is considered fully closed out" style="width:15px; height:15px; cursor:pointer; flex-shrink:0; ${pending?'outline:1.5px solid var(--red);':''}">
+  </div>`;
+}
+function inpPct(value,path,width){
+  const onInput = `${path}.pct=Math.max(0,Math.min(100,Number(this.value)||0)); if(${path}.pct===100 && !${path}.adate){ ${path}.adate=new Date().toISOString().slice(0,10); } update();`;
+  return `<input type="number" min="0" max="100" step="5" value="${value||0}" oninput="${onInput} scheduleAutoSync();" title="% complete — reaching 100% fills in today's actual finish date if it's blank" style="width:${width}px; flex-shrink:0; font-size:10.5px; height:24px; text-align:right;">`;
+}
+function iconBtn(icon,onClick,title){ return `<button class="iconbtn" onclick="${onClick}" title="${title}"><i class="ti ti-${icon}"></i></button>`; }
+function roSpan(id,text,italic){ return `<span id="${id}" style="font-size:11.5px; color:var(--text-secondary); ${italic?'font-style:italic;':''}">${text}</span>`; }
+const relTitles = {FS:'Finish → Start', SS:'Start → Start', FF:'Finish → Finish', SF:'Start → Finish'};
+// unified predecessor-reference input for BOTH critical and feeding top-level tasks — accepts one
+// or more comma-separated "N+REL" entries (e.g. "2FS,3SS"), where N is the task # shown in the #
+// column (unified across critical + feeding) and REL is FS/SS/FF/SF. A task's actual start is the
+// LATEST (max) of every listed constraint. Leaving it blank — or typing just a bare relation code
+// like "SS" with no number — falls back to "the task directly above this one, in its own list".
+function predsInput(path, t, kind, i){
+  const val = String(t.preds===undefined ? '' : t.preds).replace(/"/g,'&quot;');
+  const placeholder = i===0 ? 'start' : '↑ above';
+  return `<input type="text" value="${val}" onchange="${path}.preds=this.value; update();" placeholder="${placeholder}" title="Predecessor task #(s) + relation, e.g. 2FS,3SS = starts after BOTH task 2 finishes (FS) AND task 3 starts (SS) — whichever lands later. Leave blank to default to the task directly above." style="width:74px; flex-shrink:0; font-size:9.5px; height:24px; padding:0 2px; text-align:center;">`;
+}
+// compact "N REL, N REL" summary of a task's resolved preds string, for the Task List tab.
+function predsLabelText(kind,i,t){
+  const raw = String(t.preds||'').trim();
+  const hasAbove = i>0;
+  if(!raw) return hasAbove ? '<span style="color:var(--text-muted);">↑ above</span>' : '<span style="color:var(--text-muted);">start</span>';
+  const parsed = parsePreds(raw);
+  if(parsed.length===1 && parsed[0].num===null) return hasAbove ? `↑ above (${parsed[0].rel})` : '<span style="color:var(--text-muted);">start</span>';
+  if(!parsed.length) return '<span style="color:var(--red);">invalid</span>';
+  return parsed.map(p=>`${p.num}${p.rel}`).join(', ');
+}
+// resolves a task's preds string into the actual predecessor task name(s) it depends on (following
+// the same "bare/blank = task directly above" default schedule() itself uses), for display.
+function predsSummaryNames(kind,i,t){
+  const all = allTopLevelTasks();
+  const nCrit = criticalTasks.length;
+  const isFeed = kind==='feed';
+  const idx = isFeed ? nCrit+i : i;
+  const parsed = parsePreds(t.preds);
+  let idxs = [];
+  if(!parsed.length || (parsed.length===1 && parsed[0].num===null)){
+    const a = aboveGlobalIndex(idx, isFeed, nCrit);
+    if(a!==null) idxs = [a];
+  } else {
+    idxs = parsed.filter(p=>p.num).map(p=>p.num-1).filter(pIdx=>pIdx>=0 && pIdx<all.length && pIdx!==idx);
+  }
+  const names = idxs.map(pIdx => (all[pIdx]||{}).name || '').filter(Boolean);
+  return names.join(' + ') || '—';
+}
+
+function ganttTopRow(kind, i, t){
+  const path = taskPath(kind, i, null);
+  const sub = hasSub(t);
+  const chev = sub ? `<button class="iconbtn" onclick="toggleExpand('${kind}',${i})" title="${t.expanded?'Collapse this phase back into its rollup bar':'Expand this phase into its sub-tasks'}" style="width:18px; height:18px; flex-shrink:0; border:0.5px solid var(--border-strong);"><i class="ti ti-chevron-${t.expanded?'down':'right'}" style="font-size:11px;"></i></button>` : `<span class="chev"></span>`;
+  const durCell = sub ? roSpan('gdur-'+kind+'-'+i, fmt(t.duration), true) : inpDur(t.duration, `${path}.duration=Math.max(1,Number(this.value)||1); update();`, 40);
+  const badge = sub ? `<span class="phase-badge">PHASE · ${t.subtasks.length}</span>` : '';
+  const relCell = predsInput(path, t, kind, i);
+  const pctCell = sub ? `${roSpan('gpct-'+kind+'-'+i, fmt(t.pct||0), true)}%` : `${inpPct(t.pct, path, 40)}%`;
+  const linkBtn = `<button class="iconbtn" onclick="openLink(${path})" title="${t.link ? 'Open link: '+t.link : 'No link set — add one in the Task list tab'}" style="${t.link ? '' : 'opacity:0.35;'}"><i class="ti ti-external-link"></i></button>`;
+  // doer/owner shown right next to the bar — edit it here in the Task list tab; kept live via
+  // setT('gdoer-...') in update() since this row is only fully re-rendered on createAll().
+  const doerSpan = `<span id="gdoer-${kind}-${i}" style="font-size:9.5px; color:var(--text-secondary); font-style:italic; flex-shrink:0; max-width:90px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="Doer">${escHtml(t.owner||'')}</span>`;
+  let right = '';
+  if(kind==='crit'){
+    const typeLabel = `<span style="font-size:9.5px; color:var(--amber); font-weight:600; flex-shrink:0;" title="Critical chain — no individual safety buffer; overall protection is pooled into the single completion buffer at the end of the project">critical</span>`;
+    right = `${doerSpan}
+      ${typeLabel}
+      ${relCell}
+      ${pctCell}
+      ${iconBtn('list-tree', `addSubtask('crit',${i})`, 'Add sub-task')}
+      ${sub ? '' : iconBtn('corner-down-right', `moveAsSubtask('crit',${i})`, 'Move this task under another task, making it a sub-task')}
+      ${criticalTasks.length>1 ? iconBtn('trash', `removeCriticalTask(${i})`, 'Remove') : ''}
+      ${linkBtn}`;
+  } else {
+    const bufAmt = Number(t.buffer)||0;
+    const typeLabel = `<span style="font-size:9.5px; color:#0F6E56; font-weight:600; flex-shrink:0;" title="Feeding chain — set its safety buffer in the Task List tab (Safety buffer column)">feeding${bufAmt>0?' +'+fmt(bufAmt)+'d':''}</span>`;
+    right = `${doerSpan}
+      ${typeLabel}
+      ${relCell}
+      ${pctCell}
+      ${iconBtn('list-tree', `addSubtask('feed',${i})`, 'Add sub-task')}
+      ${sub ? '' : iconBtn('corner-down-right', `moveAsSubtask('feed',${i})`, 'Move this task under another task, making it a sub-task')}
+      ${iconBtn('trash', `removeFeedingChain(${i})`, 'Remove')}
+      ${linkBtn}`;
+  }
+  const pc = phaseColor(kind,i);
+  return `<div class="grow">
+    <div class="gsticky-l" style="border-left:4px solid ${pc.base};">
+      <span style="font-size:10px; font-weight:700; color:var(--gold); width:22px; text-align:right; flex-shrink:0;" title="Task #${taskNumber(kind,i)}">${taskNumber(kind,i)}</span>
+      ${chev}
+      ${inpTextName(t.name, `${path}.name=this.value; ${sub?'':'update();'}`, sub?165:188, sub)}
+      ${badge}
+      ${durCell}
+    </div>
+    <div class="gtrack" id="gtrack-${kind}-${i}" style="height:22px;">
+      <div id="bar-${kind}-${i}" class="${sub?'bar-phase':''}" style="position:absolute; top:2px; bottom:2px; border-radius:4px; overflow:hidden; background:${pc.base};">
+        <div class="progress-fill" id="prog-${kind}-${i}"></div>
+        <div class="resize-handle" data-kind="${kind}" data-i="${i}" data-si=""></div>
+      </div>
+      ${kind==='feed' ? `<div id="bar-feedbuf-${i}" style="position:absolute; top:2px; bottom:2px; border-radius:4px; background:#FAEEDA; border:1.5px dashed #BA7517;"></div>` : ''}
+      ${kind==='crit' ? `<div id="bar-critbuf-${i}" style="position:absolute; top:2px; bottom:2px; border-radius:4px; background:#FAEEDA; border:1.5px dashed #BA7517; display:none;" title="Safety buffer — sits before this task"></div>` : ''}
+      <div class="bar-label" id="lbl-${kind}-${i}"></div>
+      <div class="todayline"></div>
+    </div>
+    <div class="gsticky-r">${right}</div>
+  </div>`;
+}
+
+function ganttSubRow(kind, i, si, st){
+  const path = taskPath(kind, i, si);
+  const pc = phaseColor(kind,i);
+  const bufBarId = kind==='crit' ? `bar-critbuf-${i}-s-${si}` : `bar-feedbuf-${i}-s-${si}`;
+  const typeTag = kind==='feed'
+    ? `<span style="font-size:9px; color:#0F6E56; flex-shrink:0;" title="Feeding sub-task — can carry its own safety buffer">feeding</span>`
+    : `<span style="font-size:9px; color:var(--text-muted); flex-shrink:0;" title="Critical sub-task — no individual buffer (safety is pooled into the completion buffer at the end)">critical</span>`;
+  const bufInput = kind==='feed'
+    ? `<input type="number" min="0" step="0.5" value="${st.buffer||0}" oninput="${path}.buffer=this.value===''?0:(Number(this.value)||0); update();" title="Safety buffer (days)" style="width:34px; flex-shrink:0; font-size:9px; height:22px; text-align:right;">`
+    : '';
+  return `<div class="grow sub">
+    <div class="gsticky-l" style="border-left:4px solid ${pc.light};">
+      <span style="font-size:9.5px; font-weight:700; color:var(--gold); width:22px; text-align:right; flex-shrink:0;" title="Task #${taskNumber(kind,i,si)}">${taskNumber(kind,i,si)}</span>
+      <span class="chev"></span>
+      ${inpText(st.name, `${path}.name=this.value;`, 130)}
+      ${inpDur(st.duration, `${path}.duration=Math.max(1,Number(this.value)||1); update();`, 36)}
+      ${typeTag}
+      ${bufInput}
+    </div>
+    <div class="gtrack" id="gtrack-${kind}-${i}-s-${si}" style="height:18px;">
+      <div id="bar-${kind}-${i}-s-${si}" style="position:absolute; top:1px; bottom:1px; border-radius:3px; overflow:hidden; background:${pc.light};">
+        <div class="progress-fill" id="prog-${kind}-${i}-s-${si}"></div>
+        <div class="resize-handle" data-kind="${kind}" data-i="${i}" data-si="${si}"></div>
+      </div>
+      <div id="${bufBarId}" style="position:absolute; top:1px; bottom:1px; border-radius:3px; background:#FAEEDA; border:1.5px dashed #BA7517; display:none;" title="Safety buffer — sits before this sub-task"></div>
+      <div class="bar-label sub" id="lbl-${kind}-${i}-s-${si}"></div>
+      <div class="todayline"></div>
+    </div>
+    <div class="gsticky-r">
+      <span id="gdoer-${kind}-${i}-s-${si}" style="font-size:9.5px; color:var(--text-secondary); font-style:italic; flex-shrink:0; max-width:80px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="Doer">${escHtml(st.owner||'')}</span>
+      <span style="font-size:9.5px; color:var(--text-muted); flex-shrink:0;">sub</span>
+      ${inpPct(st.pct, path, 40)}%
+      ${iconBtn('trash', `removeSubtask('${kind}',${i},${si})`, 'Remove sub-task')}
+      <button class="iconbtn" onclick="openLink(${path})" title="${st.link ? 'Open link: '+st.link : 'No link set — add one in the Task list tab'}" style="${st.link ? '' : 'opacity:0.35;'}"><i class="ti ti-external-link"></i></button>
+    </div>
+  </div>`;
+}
+
+function overallStatus(t){
+  const today = new Date(); today.setHours(0,0,0,0);
+  if(t.adate) return 'done';
+  const pf = dateAt(t.end), ps = dateAt(t.start);
+  if(pf < today) return 'overdue';
+  if(ps <= today) return 'progress';
+  return 'notstarted';
+}
+function renderStatusDonut(){
+  const leaves = allLeafTasks();
+  const counts = {done:0, progress:0, overdue:0, notstarted:0};
+  leaves.forEach(t => counts[overallStatus(t)]++);
+  const n = leaves.length || 1;
+  const colors = {done:'#3b6d11', progress:'#BA7517', overdue:'#a32d2d', notstarted:'#9a9890'};
+  const labels = {done:'Done', progress:'In progress', overdue:'Overdue', notstarted:'Not started'};
+  const order = ['done','progress','overdue','notstarted'];
+  const R = 42, C = 2*Math.PI*R;
+  let offset = 0, arcs = '';
+  order.forEach(k => {
+    const frac = counts[k]/n;
+    const len = frac*C;
+    if(len>0){
+      arcs += `<circle cx="60" cy="60" r="${R}" fill="none" stroke="${colors[k]}" stroke-width="16" stroke-dasharray="${len.toFixed(2)} ${(C-len).toFixed(2)}" stroke-dashoffset="${(-offset).toFixed(2)}" transform="rotate(-90 60 60)"></circle>`;
+    }
+    offset += len;
+  });
+  const legend = order.map(k=>`<div style="display:flex; align-items:center; gap:5px; font-size:11px; color:var(--text-secondary);"><span style="width:9px;height:9px;border-radius:2px;background:${colors[k]}; flex-shrink:0;"></span>${labels[k]} (${counts[k]})</div>`).join('');
+  return `<div style="display:flex; align-items:center; gap:18px; flex-wrap:wrap;">
+    <svg width="120" height="120" viewBox="0 0 120 120">
+      <circle cx="60" cy="60" r="${R}" fill="none" stroke="var(--surface-2)" stroke-width="16"></circle>
+      ${arcs}
+      <text x="60" y="65" text-anchor="middle" font-size="18" font-weight="700" fill="var(--text-primary)">${leaves.length}</text>
+    </svg>
+    <div style="display:flex; flex-direction:column; gap:5px;">${legend}</div>
+  </div>`;
+}
+// shared numbers behind every dashboard widget below — computed once per render so the Health,
+// Time and Cost widgets all agree with each other.
+function healthMetrics(){
+  const {chainSum, total} = schedule();
+  const leaves = allLeafTasks();
+  const today = new Date(); today.setHours(0,0,0,0);
+  const sD = startDate(); sD.setHours(0,0,0,0);
+  const elapsedDays = Math.max(0, (today-sD)/86400000);
+  const pctTime = total>0 ? Math.min(100, elapsedDays/total*100) : 0;
+  const totalDur = leaves.reduce((s,t)=>s+(Number(t.duration)||0),0);
+  const weightedPct = totalDur>0 ? leaves.reduce((s,t)=>s+(Number(t.pct)||0)*(Number(t.duration)||0),0)/totalDur : 0;
+  const doneCount = leaves.filter(t=>overallStatus(t)==='done').length;
+  const overdueCount = leaves.filter(t=>overallStatus(t)==='overdue').length;
+  const remainingCount = leaves.length - doneCount;
+  const planTot = leaves.reduce((s,t)=>s+(Number(t.plan)||0),0);
+  const actTot = leaves.reduce((s,t)=>s+((t.act===''||t.act==null)?0:Number(t.act)),0);
+  return {pctTime, weightedPct, doneCount, overdueCount, remainingCount, leavesLen:leaves.length, planTot, actTot, timeDiff: weightedPct-pctTime, chainSum, total};
+}
+function renderHealthPanel(){
+  const m = healthMetrics();
+  const timeColor = m.timeDiff >= 0 ? 'var(--green)' : (m.timeDiff >= -12 ? 'var(--amber)' : 'var(--red)');
+  const timeLabel = Math.abs(m.timeDiff) < 1 ? 'On schedule.' : (m.timeDiff >= 0 ? `${m.timeDiff.toFixed(0)}% ahead of schedule.` : `${Math.abs(m.timeDiff).toFixed(0)}% behind schedule.`);
+  const costColor = m.actTot > m.planTot ? 'var(--red)' : 'var(--green)';
+  const rows = [
+    ['Time', timeLabel, timeColor],
+    ['Tasks', `${m.remainingCount} task(s) to be completed.`, 'var(--text-primary)'],
+    ['Workload', `${m.overdueCount} task(s) overdue.`, m.overdueCount>0 ? 'var(--red)' : 'var(--text-primary)'],
+    ['Progress', `${m.weightedPct.toFixed(0)}% complete.`, 'var(--text-primary)'],
+    ['Cost', m.planTot>0 ? `₹${m.planTot.toLocaleString('en-IN')}K plan · ₹${m.actTot.toLocaleString('en-IN')}K actual.` : 'No cost data entered.', m.planTot>0 ? costColor : 'var(--text-muted)'],
+  ];
+  return rows.map(([label,val,color]) => `
+    <div style="display:flex; justify-content:space-between; gap:12px; padding:6px 0; border-bottom:0.5px solid var(--border); font-size:12.5px;">
+      <span style="color:var(--text-secondary);">${label}</span>
+      <span style="color:${color}; font-weight:600; text-align:right;">${val}</span>
+    </div>`).join('');
+}
+// one bar per phase (a top-level task with sub-tasks) showing its own rolled-up % complete —
+// deliberately limited to phases rather than every one of the 60+ leaf tasks, so this stays
+// scannable as a dashboard tile instead of a scrolling list.
+function renderPhaseProgress(){
+  const phases = criticalTasks.map((t,i)=>({t,i})).filter(x=>hasSub(x.t));
+  if(!phases.length) return `<p style="font-size:12px; color:var(--text-muted);">No multi-step phases yet.</p>`;
+  return phases.map(({t,i}) => {
+    const pc = phaseColor('crit', i);
+    const pct = fmt(t.pct||0);
+    return `<div style="margin-bottom:8px;">
+      <div style="display:flex; justify-content:space-between; font-size:11px; color:var(--text-secondary); margin-bottom:3px;"><span>${escHtml(shortName(t.name))}</span><span style="font-weight:600; color:${pc.base};">${pct}%</span></div>
+      <div style="height:8px; background:var(--surface-2); border-radius:4px; overflow:hidden;"><div style="height:100%; width:${Math.min(100,pct)}%; background:${pc.base};"></div></div>
+    </div>`;
+  }).join('');
+}
+function renderTimeWidget(){
+  const m = healthMetrics();
+  function row(label, val, color){
+    return `<div style="display:flex; align-items:center; gap:8px; margin-bottom:9px;">
+      <span style="width:70px; font-size:11.5px; color:var(--text-secondary); flex-shrink:0;">${label}</span>
+      <div style="flex:1; height:9px; background:var(--surface-2); border-radius:5px; overflow:hidden;"><div style="height:100%; width:${Math.min(100,Math.abs(val)).toFixed(1)}%; background:${color};"></div></div>
+      <span style="width:40px; text-align:right; font-size:11.5px; font-weight:600; color:${color}; flex-shrink:0;">${val.toFixed(0)}%</span>
+    </div>`;
+  }
+  const diff = m.timeDiff;
+  const diffColor = diff>=0 ? 'var(--green)' : 'var(--red)';
+  return row('Planned', m.pctTime, 'var(--text-muted)') +
+    row('Actual', m.weightedPct, 'var(--today)') +
+    row(diff>=0 ? 'Ahead' : 'Behind', Math.abs(diff), diffColor);
+}
+function renderCostWidget(){
+  const m = healthMetrics();
+  const maxV = Math.max(1, m.planTot, m.actTot);
+  function bar(label, val, color){
+    return `<div style="display:flex; align-items:center; gap:8px; margin-bottom:8px;">
+      <span style="width:56px; font-size:11.5px; color:var(--text-secondary); flex-shrink:0;">${label}</span>
+      <div style="flex:1; height:14px; background:var(--surface-2); border-radius:4px; overflow:hidden;"><div style="height:100%; width:${(val/maxV*100).toFixed(1)}%; background:${color};"></div></div>
+      <span style="width:66px; text-align:right; font-size:11.5px; font-weight:600; flex-shrink:0;">₹${val.toLocaleString('en-IN')}K</span>
+    </div>`;
+  }
+  return bar('Planned', m.planTot, 'var(--today)') + bar('Actual', m.actTot, m.actTot>m.planTot?'var(--red)':'var(--green)');
+}
+// stacked bar per person (from the Owner field, filled in on the 3 days planning / Daily
+// follow-up tabs) — done/remaining/overdue leaf-task counts, capped to the 8 busiest people.
+function renderWorkloadWidget(){
+  const leaves = allLeafTasks();
+  const byOwner = {};
+  leaves.forEach(t => {
+    const owner = (t.owner||'').trim() || 'Unassigned';
+    if(!byOwner[owner]) byOwner[owner] = {done:0, remaining:0, overdue:0};
+    const s = overallStatus(t);
+    if(s==='done') byOwner[owner].done++;
+    else if(s==='overdue') byOwner[owner].overdue++;
+    else byOwner[owner].remaining++;
+  });
+  const entries = Object.entries(byOwner)
+    .map(([name,c]) => ({name, ...c, total:c.done+c.remaining+c.overdue}))
+    .sort((a,b)=>b.total-a.total)
+    .slice(0,8);
+  if(!entries.length) return `<p style="font-size:12px; color:var(--text-muted);">No tasks assigned yet — add an owner in the 3 days planning or Daily follow-up tab.</p>`;
+  const maxV = Math.max(1, ...entries.map(e=>e.total));
+  const bars = entries.map(e => `
+    <div style="display:flex; align-items:center; gap:8px; margin-bottom:7px;">
+      <span style="width:90px; font-size:11.5px; color:var(--text-secondary); flex-shrink:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${escHtml(e.name)}">${escHtml(e.name)}</span>
+      <div style="flex:1; height:10px; border-radius:4px; overflow:hidden; display:flex; background:var(--surface-2);">
+        <div style="height:100%; width:${(e.done/maxV*100).toFixed(1)}%; background:var(--green);"></div>
+        <div style="height:100%; width:${(e.remaining/maxV*100).toFixed(1)}%; background:var(--today);"></div>
+        <div style="height:100%; width:${(e.overdue/maxV*100).toFixed(1)}%; background:var(--red);"></div>
+      </div>
+      <span style="width:22px; text-align:right; font-size:11px; color:var(--text-muted); flex-shrink:0;">${e.total}</span>
+    </div>`).join('');
+  const legend = `<div style="display:flex; gap:14px; font-size:10.5px; color:var(--text-muted); margin-top:6px;">
+      <span><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:var(--green); margin-right:4px;"></span>Done</span>
+      <span><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:var(--today); margin-right:4px;"></span>Remaining</span>
+      <span><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:var(--red); margin-right:4px;"></span>Overdue</span>
+    </div>`;
+  return bars + legend;
+}
+function renderStats(){
+  setT('stat-health', renderHealthPanel());
+  setT('stat-donut', renderStatusDonut());
+  setT('stat-progress', renderPhaseProgress());
+  setT('stat-time', renderTimeWidget());
+  setT('stat-cost', renderCostWidget());
+  setT('stat-workload', renderWorkloadWidget());
+}
+
+function taskFromHandle(kind, i, si){
+  const parent = kind==='crit' ? criticalTasks[i] : feedingChains[i].tasks[0];
+  return (si===null || si===undefined || isNaN(si)) ? parent : parent.subtasks[si];
+}
+function attachResizeHandles(){
+  document.querySelectorAll('.resize-handle').forEach(h => {
+    h.onpointerdown = function(ev){
+      ev.preventDefault();
+      ev.stopPropagation();
+      const kind = h.dataset.kind;
+      const i = Number(h.dataset.i);
+      const si = h.dataset.si===''? null : Number(h.dataset.si);
+      const t = taskFromHandle(kind, i, si);
+      if(!t) return;
+      const startX = ev.clientX;
+      const startDur = Number(t.duration)||0.5;
+      const pxw = pxPerDay();
+      try{ h.setPointerCapture(ev.pointerId); }catch(e){}
+      function onMove(mv){
+        const dx = mv.clientX - startX;
+        let nd = startDur + dx/pxw;
+        nd = Math.max(1, Math.round(nd));
+        t.duration = nd;
+        update();
+      }
+      function onUp(){
+        h.removeEventListener('pointermove', onMove);
+        h.removeEventListener('pointerup', onUp);
+        createAll();
+      }
+      h.addEventListener('pointermove', onMove);
+      h.addEventListener('pointerup', onUp);
+    };
+  });
+}
+
+function createAll(){
+  schedule();
+  let g = '';
+  criticalTasks.forEach((t,i) => {
+    g += ganttTopRow('crit', i, t);
+    if(t.expanded && hasSub(t)) t.subtasks.forEach((st,si) => { g += ganttSubRow('crit', i, si, st); });
+  });
+  g += `<div style="padding:6px 0 6px 250px;"><button onclick="addCriticalTask()" style="font-size:12px; padding:5px 10px;"><i class="ti ti-plus" style="font-size:13px; vertical-align:-2px; margin-right:4px;"></i>Add critical task</button></div>`;
+  g += `<div class="grow">
+    <div class="gsticky-l" style="font-size:12.5px; color:var(--text-secondary); font-style:italic;">Completion buffer</div>
+    <div class="gtrack" style="height:22px;"><div id="bar-buf-completion" style="position:absolute; top:2px; bottom:2px; border-radius:4px; background:#FAEEDA; border:1.5px dashed #BA7517;"></div><div class="todayline"></div></div>
+    <div class="gsticky-r"></div>
+  </div>`;
+  g += `<div style="height:12px;"></div>`;
+  feedingChains.forEach((fc,ci) => {
+    const t = fc.tasks[0];
+    g += ganttTopRow('feed', ci, t);
+    if(t.expanded && hasSub(t)) t.subtasks.forEach((st,si) => { g += ganttSubRow('feed', ci, si, st); });
+  });
+  g += `<div style="padding:6px 0 6px 250px;"><button onclick="addFeedingChain()" style="font-size:12px; padding:5px 10px;"><i class="ti ti-plus" style="font-size:13px; vertical-align:-2px; margin-right:4px;"></i>Add feeding chain</button></div>`;
+  document.getElementById('grows').innerHTML = g;
+  applyZoomWidths();
+  attachResizeHandles();
+
+  let l = '';
+  function listTopRow(kind, i, t, label, feedsInto){
+    const path = taskPath(kind, i, null);
+    const sub = hasSub(t);
+    const chev = sub ? `<button class="iconbtn" onclick="toggleExpand('${kind}',${i})" title="${t.expanded?'Collapse this phase back into its rollup bar':'Expand this phase into its sub-tasks'}" style="width:18px; height:18px; flex-shrink:0; border:0.5px solid var(--border-strong);"><i class="ti ti-chevron-${t.expanded?'down':'right'}" style="font-size:11px;"></i></button>` : `<span class="chev"></span>`;
+    const nameCell = `${chev}${inpTextName(t.name, `${path}.name=this.value; update();`, sub?126:150, sub)}${sub?` <span class="phase-badge">PHASE · ${t.subtasks.length}</span>`:''}`;
+    const durCell = sub ? roSpan('ldur-'+kind+'-'+i, fmt(t.duration), true) : inpDur(t.duration, `${path}.duration=Math.max(1,Number(this.value)||1); update();`, 50);
+    const adateCell = sub ? `<span id="ladate-${kind}-${i}" style="font-size:11px; font-style:italic; color:var(--text-secondary);"></span>` : inpDate(t.adate, `${path}.adate=this.value; update();`, 116);
+    const planCell = sub ? roSpan('lplan-'+kind+'-'+i, (Number(t.plan)||0).toLocaleString('en-IN'), true) : inpBud(t.plan, `${path}.plan=this.value===''?'':(Number(this.value)||0); update();`, 56);
+    const actCell = sub ? roSpan('lact-'+kind+'-'+i, t.act===''?'—':(Number(t.act)||0).toLocaleString('en-IN'), true) : inpBud(t.act, `${path}.act=this.value===''?'':(Number(this.value)||0); update();`, 56);
+    const relTxt = sub ? '' : `<span id="lrel-${kind}-${i}" title="Predecessor task #(s) + relation — e.g. 2FS,3SS. Edit in the Gantt tab.">${predsLabelText(kind,i,t)}</span>`;
+    const pctCell = sub ? roSpan('lpct-'+kind+'-'+i, fmt(t.pct||0)+'%', true) : inpPct(t.pct, path, 46)+'%';
+    const linkCell = `<div style="display:flex; align-items:center; gap:4px;">${inpText(t.link, `${path}.link=this.value;`, 150)}<button class="iconbtn" onclick="openLink(${path})" title="Open link"><i class="ti ti-external-link"></i></button></div>`;
+    const vendorCell = `<input type="text" list="vendor-suggestions" value="${String(t.vendor||'').replace(/"/g,'&quot;')}" oninput="${path}.vendor=this.value; scheduleAutoSync();" placeholder="Vendor" title="Who to follow up with for this task" style="width:130px; font-size:11.5px; height:24px;">`;
+    const doerCell = `<input type="text" value="${String(t.owner||'').replace(/"/g,'&quot;')}" oninput="${path}.owner=this.value; update();" placeholder="Doer" title="Who's doing this task" style="width:120px; font-size:11.5px; height:24px;">`;
+    const critCell = kind==='crit'
+      ? `<span style="display:flex; align-items:center; gap:4px;"><span style="font-size:11px; font-weight:600; color:var(--amber);">Critical</span>${criticalTasks.length>1 ? `<button class="iconbtn" onclick="convertCriticalToFeeding(${i})" title="Convert to a feeding chain" style="width:18px; height:18px;"><i class="ti ti-arrows-exchange" style="font-size:11px;"></i></button>` : ''}</span>`
+      : `<span style="display:flex; align-items:center; gap:4px;"><span style="font-size:11px; font-weight:600; color:#0F6E56;">Feeding</span><button class="iconbtn" onclick="convertFeedingToCritical(${i})" title="Convert to a critical-chain task" style="width:18px; height:18px;"><i class="ti ti-arrows-exchange" style="font-size:11px;"></i></button></span>`;
+    const bufCell = kind==='feed'
+      ? inpBud(t.buffer||0, `${path}.buffer=this.value===''?0:(Number(this.value)||0); update();`, 50)
+      : `<span style="color:var(--text-muted);">—</span>`;
+    const arrLen = kind==='crit' ? criticalTasks.length : feedingChains.length;
+    const moveFn = kind==='crit' ? 'reorderCriticalTask' : 'reorderFeedingChain';
+    const numCell = `<div style="display:flex; align-items:center; gap:2px;">
+        <span class="drag-handle" title="Drag to reorder" style="cursor:grab; color:var(--text-muted); font-size:13px; line-height:1;"><i class="ti ti-grip-vertical"></i></span>
+        <span>${taskNumber(kind,i)}</span>
+        <span style="display:flex; flex-direction:column; margin-left:2px;">
+          <button class="iconbtn" style="padding:0; width:14px; height:11px; line-height:9px; opacity:${i===0?'0.25':'1'};" onclick="${moveFn}(${i},${i-1})" title="Move task up" ${i===0?'disabled':''}><i class="ti ti-chevron-up" style="font-size:10px;"></i></button>
+          <button class="iconbtn" style="padding:0; width:14px; height:11px; line-height:9px; opacity:${i===arrLen-1?'0.25':'1'};" onclick="${moveFn}(${i},${i+1})" title="Move task down" ${i===arrLen-1?'disabled':''}><i class="ti ti-chevron-down" style="font-size:10px;"></i></button>
+        </span>
+      </div>`;
+    return `<tr draggable="true" ondragstart="dragStartRow('${kind}',${i})" ondragover="dragOverRow(event)" ondrop="dropRow('${kind}',${i})">
+      <td style="color:var(--gold); font-weight:700;">${numCell}</td>
+      <td class="l">${nameCell}</td>
+      <td class="l" style="padding-left:8px;">${doerCell}</td>
+      <td class="l"><span style="color:${kind==='crit'?'#D85A30':'#0F6E56'}; font-weight:600; font-size:11px;">${label}</span></td>
+      <td class="l" style="color:var(--text-muted); font-size:11px;" id="lfeeds-${kind}-${i}">${feedsInto}</td>
+      <td style="font-size:11px; font-weight:600;">${relTxt}</td>
+      <td class="l" style="padding-left:8px;">${critCell}</td>
+      <td>${bufCell}</td>
+      <td>${durCell}</td>
+      <td>${pctCell}</td>
+      <td id="lpd-${kind}-${i}" style="color:var(--text-secondary);"></td>
+      <td id="lpf-${kind}-${i}" style="color:var(--text-secondary);"></td>
+      <td class="l" style="padding-left:8px;">${adateCell}</td>
+      <td id="ldl-${kind}-${i}"></td>
+      <td class="col-budget">${planCell}</td>
+      <td class="col-budget">${actCell}</td>
+      <td class="col-budget" id="lvr-${kind}-${i}"></td>
+      <td class="l" style="padding-left:8px;">${linkCell}</td>
+      <td class="l" style="padding-left:8px;">${vendorCell}</td>
+      <td class="l" style="padding-left:8px;">${qcCell(t, path)}</td>
+    </tr>`;
+  }
+  function listSubRow(kind, i, si, st){
+    const path = taskPath(kind, i, si);
+    const linkCell = `<div style="display:flex; align-items:center; gap:4px;">${inpText(st.link, `${path}.link=this.value;`, 150)}<button class="iconbtn" onclick="openLink(${path})" title="Open link"><i class="ti ti-external-link"></i></button></div>`;
+    const vendorCell = `<input type="text" list="vendor-suggestions" value="${String(st.vendor||'').replace(/"/g,'&quot;')}" oninput="${path}.vendor=this.value; scheduleAutoSync();" placeholder="Vendor" title="Who to follow up with for this task" style="width:130px; font-size:11.5px; height:24px;">`;
+    const doerCell = `<input type="text" value="${String(st.owner||'').replace(/"/g,'&quot;')}" oninput="${path}.owner=this.value; update();" placeholder="Doer" title="Who's doing this task" style="width:120px; font-size:11.5px; height:24px;">`;
+    const critCell = kind==='feed'
+      ? `<span style="font-size:11px; font-weight:600; color:#0F6E56;">Feeding</span>`
+      : `<span style="font-size:11px; font-weight:600; color:var(--amber);">Critical</span>`;
+    const bufCell = kind==='feed'
+      ? inpBud(st.buffer||0, `${path}.buffer=this.value===''?0:(Number(this.value)||0); update();`, 50)
+      : `<span style="color:var(--text-muted);">—</span>`;
+    return `<tr style="background:rgba(176,141,62,0.04);">
+      <td style="color:var(--gold); font-weight:600; font-size:11px;">${taskNumber(kind,i,si)}</td>
+      <td class="l" style="padding-left:20px;">${inpText(st.name, `${path}.name=this.value; update();`, 126)}</td>
+      <td class="l" style="padding-left:8px;">${doerCell}</td>
+      <td class="l"><span style="font-size:10px; color:var(--text-muted);">sub-task</span></td>
+      <td class="l"></td>
+      <td></td>
+      <td class="l" style="padding-left:8px;">${critCell}</td>
+      <td>${bufCell}</td>
+      <td>${inpDur(st.duration, `${path}.duration=Math.max(1,Number(this.value)||1); update();`, 50)}</td>
+      <td>${inpPct(st.pct, path, 46)}%</td>
+      <td id="lpd-${kind}-${i}-s-${si}" style="color:var(--text-secondary);"></td>
+      <td id="lpf-${kind}-${i}-s-${si}" style="color:var(--text-secondary);"></td>
+      <td class="l" style="padding-left:8px;">${inpDate(st.adate, `${path}.adate=this.value; update();`, 116)}</td>
+      <td id="ldl-${kind}-${i}-s-${si}"></td>
+      <td class="col-budget">${inpBud(st.plan, `${path}.plan=this.value===''?'':(Number(this.value)||0); update();`, 56)}</td>
+      <td class="col-budget">${inpBud(st.act, `${path}.act=this.value===''?'':(Number(this.value)||0); update();`, 56)}</td>
+      <td class="col-budget" id="lvr-${kind}-${i}-s-${si}"></td>
+      <td class="l" style="padding-left:8px;">${linkCell}</td>
+      <td class="l" style="padding-left:8px;">${vendorCell}</td>
+      <td class="l" style="padding-left:8px;">${qcCell(st, path)}</td>
+    </tr>`;
+  }
+  criticalTasks.forEach((t,i) => {
+    l += listTopRow('crit', i, t, 'Critical', predsSummaryNames('crit',i,t));
+    if(t.expanded && hasSub(t)) t.subtasks.forEach((st,si) => { l += listSubRow('crit', i, si, st); });
+  });
+  l += `<tr style="background:#FAEEDA22;">
+    <td></td>
+    <td class="l" style="font-style:italic; color:var(--amber); font-weight:600;">Completion buffer</td>
+    <td></td>
+    <td class="l"><span style="color:var(--amber); font-weight:600; font-size:11px;">Buffer</span></td>
+    <td class="l" style="color:var(--text-muted);">protects handover date</td>
+    <td></td>
+    <td></td>
+    <td></td>
+    <td id="ldur-cbuf"></td>
+    <td></td>
+    <td id="lpd-cbuf" style="color:var(--text-secondary);"></td>
+    <td id="lpf-cbuf" style="color:var(--text-secondary);"></td>
+    <td></td><td></td><td class="col-budget"></td><td class="col-budget"></td><td class="col-budget"></td><td></td><td></td><td></td>
+  </tr>`;
+  feedingChains.forEach((fc,ci) => {
+    const t = fc.tasks[0];
+    l += listTopRow('feed', ci, t, 'Feeding', predsSummaryNames('feed',ci,t));
+    if(t.expanded && hasSub(t)) t.subtasks.forEach((st,si) => { l += listSubRow('feed', ci, si, st); });
+  });
+  l += `<tr style="font-weight:600; border-top:2px solid var(--border-strong);">
+    <td></td>
+    <td class="l">Totals (₹ thousand)</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td>
+    <td class="col-budget" id="tot-plan"></td><td class="col-budget" id="tot-act"></td><td class="col-budget" id="tot-var"></td><td></td><td></td><td></td>
+  </tr>`;
+  document.getElementById('lrows').innerHTML = l;
+
+  renderVendorRows();
+  renderTeamRows();
+
+  document.getElementById('m-name').value = meta.name;
+  document.getElementById('m-client').value = meta.client;
+  document.getElementById('m-location').value = meta.location;
+  document.getElementById('m-start').value = meta.start;
+  document.getElementById('m-delivery-date').value = meta.deliveryDate || '';
+  document.getElementById('qa-link').value = meta.qaLink || '';
+  const syncUrlEl = document.getElementById('sync-url'); if(syncUrlEl) syncUrlEl.value = syncUrl || '';
+  const syncAutoEl = document.getElementById('sync-auto'); if(syncAutoEl) syncAutoEl.checked = !!autoSync;
+  const badgeEl = document.getElementById('active-project-badge'); if(badgeEl) badgeEl.textContent = meta.name || '(untitled — set a Project name)';
+  renderSyncStatus();
+  if(syncUrl && !projectListFetched){ projectListFetched = true; refreshProjectList(); }
+  update();
+}
+function onSyncUrlSet(){
+  if(syncUrl && !projectListFetched){ projectListFetched = true; refreshProjectList(); }
+}
+// On first load (or right after pasting the Web App URL), silently pulls this project's most
+// recent data from its Sheet — so reopening this same static HTML file always picks up whatever
+// was last synced, instead of showing the sample/baked-in data forever. No confirm() here since
+// this only runs once, before the person has made any local edits worth protecting.
+// Shared retrying GET — reads (list/load/status) have generally been more reliable than writes in
+// testing, but still occasionally hit the same intermittent network/CORS quirk, so retry a couple
+// of times with a short gap before giving up, instead of failing on the very first hiccup.
+async function fetchJsonRetry_(url, tries){
+  tries = tries || 3;
+  let lastErr;
+  for(let i = 0; i < tries; i++){
+    try {
+      const res = await fetch(url);
+      return await res.json();
+    } catch(err){
+      lastErr = err;
+      if(i < tries - 1) await new Promise(r => setTimeout(r, 800 * (i + 1)));
+    }
+  }
+  throw lastErr;
+}
+async function autoPullLatest(){
+  if(!syncUrl || !meta.name) return;
+  try {
+    const url = syncUrl + (syncUrl.includes('?') ? '&' : '?') + 'action=load&project=' + encodeURIComponent(meta.name);
+    const data = await fetchJsonRetry_(url);
+    if(data && data.ok && data.rawState){
+      const s = JSON.parse(data.rawState);
+      suppressSnapshot = true;
+      meta = s.meta; criticalTasks = s.criticalTasks; feedingChains = s.feedingChains;
+      lookahead = s.lookahead || lookahead; daily = s.daily || daily; readiness_ = s.readiness_ || readiness_;
+      zoomPct = s.zoomPct || zoomPct; vendorPayments = s.vendorPayments || [];
+      if(!meta.dayStart) meta.dayStart = '08:00';
+      if(meta.qaLink===undefined) meta.qaLink = '';
+      if(!meta.team) meta.team = emptyTeam();
+      projectExists = true; // a Sheet already exists for this project name
+      createAll();
+      suppressSnapshot = false;
+      resetHistory();
+      saveLocal(); // keep this browser's backup in sync with what was just pulled
+      renderSyncStatus('Loaded latest data for "'+meta.name+'" from the Sheet');
+    }
+    // data.ok===false just means this project hasn't synced yet — keep the current data as-is,
+    // and projectExists stays false until "Create project" is clicked.
+  } catch(err){
+    // silent — the person can still use "Create project" / "Sync now" or the "Switch project" dropdown manually
+  }
+}
+// Explicit, user-triggered pull for the CURRENTLY open project — separate from "Switch project"
+// (which is for loading a DIFFERENT project). Confirms first since it overwrites whatever is on
+// screen (and this browser's local backup) with the Sheet's copy.
+async function reloadFromSheet(){
+  if(!syncUrl){ renderSyncStatus('Paste the Web App URL first', true); return; }
+  if(!meta.name || !meta.name.trim()){ renderSyncStatus('Set a Project name first', true); return; }
+  if(!confirm('Reload "'+meta.name+'" from the Google Sheet? This replaces everything currently on screen (and this browser\'s local backup) with whatever is saved in the Sheet.')) return;
+  renderSyncStatus('Reloading from Sheet…');
+  await autoPullLatest();
+}
+
+function showTab(id){
+  activeTabId = id;
+  // full rebuild before switching — the Gantt tab and Task list tab edit the very same task
+  // objects, but several fields (name, duration, %, etc.) only call update() on every keystroke
+  // rather than a full createAll() rebuild, to avoid losing cursor focus mid-type. That means the
+  // *other*, currently-hidden tab's inputs can go stale until something rebuilds them. Switching
+  // tabs always blurs whatever was focused anyway, so this is a safe moment to force a full,
+  // guaranteed-fresh rebuild — whichever tab you land on always reflects the latest edits made
+  // anywhere else.
+  createAll();
+  ['summary','gantt','list','lookahead','daily','vendors'].forEach(t => {
+    document.getElementById('tab-'+t).style.display = (t===id) ? 'block' : 'none';
+    document.getElementById('tb-'+t).classList.toggle('active', t===id);
+  });
+  if(id==='gantt') applyZoomWidths();
+}
+function openQaLink(){
+  if(meta.qaLink) window.open(meta.qaLink, '_blank');
+  else alert('No QA checklist link set yet — paste one in the box first.');
+}
+let grayscaleOn = false;
+function toggleGrayscale(){
+  grayscaleOn = !grayscaleOn;
+  const el = document.getElementById('wrap');
+  if(el) el.style.filter = grayscaleOn ? 'grayscale(1)' : '';
+  const btn = document.getElementById('btn-bw');
+  if(btn && btn.classList) btn.classList.toggle('active', grayscaleOn);
+}
+
+// theme: null = follow the OS/browser setting (prefers-color-scheme), 'dark'/'light' = manual override
+let themeOverride = null;
+function systemPrefersDark(){
+  return (typeof window!=='undefined' && typeof window.matchMedia==='function')
+    ? window.matchMedia('(prefers-color-scheme: dark)').matches : false;
+}
+function applyTheme(){
+  const root = (typeof document!=='undefined' && document.documentElement) ? document.documentElement : null;
+  if(root && root.classList){ root.classList.remove('theme-dark'); root.classList.remove('theme-light'); }
+  if(root && root.classList && themeOverride){ root.classList.add(themeOverride==='dark' ? 'theme-dark' : 'theme-light'); }
+  const isDark = themeOverride ? themeOverride==='dark' : systemPrefersDark();
+  const btn = document.getElementById('btn-theme');
+  if(btn){
+    btn.innerHTML = `<i class="ti ti-${isDark?'sun':'moon'}" style="font-size:14px;"></i>`;
+    if('title' in btn) btn.title = isDark ? 'Switch to light theme' : 'Switch to dark theme';
+  }
+}
+function toggleTheme(){
+  const isDark = themeOverride ? themeOverride==='dark' : systemPrefersDark();
+  themeOverride = isDark ? 'light' : 'dark';
+  applyTheme();
+}
+function printPDF(){
+  document.body.classList.add('printing');
+  const restore = () => {
+    document.body.classList.remove('printing');
+    showTab(activeTabId);
+    window.removeEventListener('afterprint', restore);
+  };
+  window.addEventListener('afterprint', restore);
+  window.print();
+}
+
+function toggleExpand(kind,i){
+  const t = kind==='crit' ? criticalTasks[i] : feedingChains[i].tasks[0];
+  t.expanded = !t.expanded;
+  createAll();
+}
+// expand/collapse every phase at once (shared expanded flag, so this affects both the
+// Gantt tab and the Task list tab together since they read the same task objects)
+function expandAll(state){
+  criticalTasks.forEach(t => { if(hasSub(t)) t.expanded = state; });
+  feedingChains.forEach(fc => { const t = fc.tasks[0]; if(hasSub(t)) t.expanded = state; });
+  createAll();
+}
+// hides/shows the Plan, Actual & Variance (budget) columns in the Task list tab — purely a
+// display toggle, doesn't touch the underlying data.
+let budgetColsHidden = false;
+function toggleBudgetCols(){
+  budgetColsHidden = !budgetColsHidden;
+  const table = document.getElementById('list-table');
+  if(table && table.classList) table.classList.toggle('budget-hidden', budgetColsHidden);
+  const btn = document.getElementById('btn-budget-toggle');
+  if(btn) btn.innerHTML = budgetColsHidden
+    ? '<i class="ti ti-columns" style="font-size:13px; vertical-align:-2px; margin-right:4px;"></i>Show budget columns'
+    : '<i class="ti ti-columns-off" style="font-size:13px; vertical-align:-2px; margin-right:4px;"></i>Hide budget columns';
+}
+function addSubtask(kind,i){
+  const t = kind==='crit' ? criticalTasks[i] : feedingChains[i].tasks[0];
+  if(!t.subtasks) t.subtasks = [];
+  t.subtasks.push(newTask('New sub-task', 3, 0));
+  t.expanded = true;
+  createAll();
+}
+function removeSubtask(kind,i,si){
+  const t = kind==='crit' ? criticalTasks[i] : feedingChains[i].tasks[0];
+  t.subtasks.splice(si,1);
+  createAll();
+}
+function addCriticalTask(){ criticalTasks.push(newTask('New task', 5, 0)); createAll(); }
+// snapshots every top-level task's resolved NUMBERED predecessor references (by object identity)
+// before an array mutation (delete/insert/reorder/convert). Bare/blank preds (meaning "the task
+// directly above, positionally") are recorded as null and left completely untouched by restore —
+// they should keep following whatever ends up above after the mutation, not stay pinned to an
+// old object.
+function capturePredObjects(){
+  const all = allTopLevelTasks();
+  const map = new Map();
+  all.forEach(t => {
+    const parsed = parsePreds(t.preds);
+    if(!parsed.length || (parsed.length===1 && parsed[0].num===null)){ map.set(t, null); return; }
+    map.set(t, parsed.map(p => ({ obj: (p.num && p.num-1>=0 && p.num-1<all.length) ? all[p.num-1] : null, rel: p.rel })));
+  });
+  return map;
+}
+// rebuilds every top-level task's preds string from objects captured by capturePredObjects(),
+// using each referenced object's CURRENT unified number in the (possibly mutated) arrays. A
+// reference whose object no longer exists anywhere is silently dropped from that task's preds.
+function restorePredObjects(map){
+  const all = allTopLevelTasks();
+  map.forEach((refs, t) => {
+    if(refs===null) return; // untouched — bare/blank preds keep following whatever's now above
+    if(!all.includes(t)) return; // the task itself was removed
+    const parts = [];
+    refs.forEach(r => { if(!r.obj) return; const idx = all.indexOf(r.obj); if(idx>=0) parts.push((idx+1)+r.rel); });
+    t.preds = parts.join(',');
+  });
+}
+// removes criticalTasks[i] from the array and returns the removed task object, remapping every
+// other top-level task's numbered predecessor references (by object identity, since unified task
+// numbers shift). Shared by removeCriticalTask() and moveAsSubtask() below — neither re-renders on
+// its own, callers must call createAll().
+function extractCriticalTask(i){
+  const arr = criticalTasks;
+  const removed = arr[i];
+  const snap = capturePredObjects();
+  arr.splice(i,1);
+  restorePredObjects(snap);
+  return removed;
+}
+function removeCriticalTask(i){
+  if(criticalTasks.length<=1) return;
+  extractCriticalTask(i);
+  createAll();
+}
+function addFeedingChain(){
+  const t = newTask('New feeding task', 5, 0);
+  t.preds = criticalTasks.length + 'FS'; // defaults to starting once the last critical task finishes
+  feedingChains.push({tasks:[t]});
+  createAll();
+}
+function removeFeedingChain(ci){
+  const snap = capturePredObjects();
+  feedingChains.splice(ci,1);
+  restorePredObjects(snap);
+  createAll();
+}
+// converts a critical-chain task into its own feeding chain — its own preds string and every
+// other task's numbered references are remapped automatically by object identity. Captures and
+// restores around the WHOLE move (removal + re-insertion into feedingChains), not just the
+// removal, so anything still pointing at this task keeps pointing at it (at its new unified
+// number) instead of losing the reference while it's briefly in neither list.
+function convertCriticalToFeeding(i){
+  if(criticalTasks.length<=1){ alert('At least one critical task must remain.'); return; }
+  const snap = capturePredObjects();
+  const moved = criticalTasks[i];
+  criticalTasks.splice(i,1);
+  feedingChains.push({tasks:[moved]});
+  restorePredObjects(snap);
+  createAll();
+}
+// converts a feeding chain back into a critical-chain task, inserting it right after the
+// highest-numbered task it currently depends on (or at the very start if it has no numbered
+// predecessor), and remapping every task's numbered references by object identity.
+function convertFeedingToCritical(ci){
+  const fc = feedingChains[ci];
+  const moved = fc.tasks[0];
+  const all = allTopLevelTasks();
+  const numberedIdxs = parsePreds(moved.preds).filter(p=>p.num).map(p=>p.num-1).filter(idx=>idx>=0 && idx<all.length);
+  const predObj = numberedIdxs.length ? all[Math.max(...numberedIdxs)] : null;
+  const snap = capturePredObjects();
+  feedingChains.splice(ci,1);
+  const predCritIdx = predObj ? criticalTasks.indexOf(predObj) : -1;
+  const insertAt = predCritIdx>=0 ? predCritIdx+1 : criticalTasks.length;
+  criticalTasks.splice(insertAt, 0, moved);
+  restorePredObjects(snap);
+  createAll();
+}
+// resolves a 1-based task # (as shown in the # column, unified across critical-chain and
+// feeding-chain tasks) to its {kind, i, t} — used by moveAsSubtask() below.
+function taskByNumber(num){
+  const n = Number(num);
+  if(!Number.isInteger(n) || n<1) return null;
+  if(n <= criticalTasks.length) return {kind:'crit', i:n-1, t:criticalTasks[n-1]};
+  const fi = n - criticalTasks.length - 1;
+  if(fi>=0 && fi<feedingChains.length) return {kind:'feed', i:fi, t:feedingChains[fi].tasks[0]};
+  return null;
+}
+// converts an existing top-level task (critical-chain or feeding-chain) into a sub-task of
+// another top-level task — the reverse of "Add sub-task". Only offered for tasks that don't
+// already have sub-tasks of their own, since the UI only ever renders one level of nesting.
+function moveAsSubtask(kind, i){
+  const t = kind==='crit' ? criticalTasks[i] : feedingChains[i].tasks[0];
+  if(hasSub(t)){
+    alert(`"${t.name}" already has its own sub-tasks. Only a task with no sub-tasks of its own can be moved under another task.`);
+    return;
+  }
+  const input = prompt(`Move "${t.name}" under which task? Enter its # (see the # column in the Task list tab).`);
+  if(input===null) return;
+  const target = taskByNumber(input.trim());
+  if(!target || target.t===t){
+    alert(target ? 'A task can\'t become its own sub-task.' : 'Not a valid task number.');
+    return;
+  }
+  const snap = capturePredObjects();
+  let moved;
+  if(kind==='crit'){
+    moved = criticalTasks[i];
+    criticalTasks.splice(i,1);
+  } else {
+    moved = feedingChains[i].tasks[0];
+    feedingChains.splice(i,1);
+  }
+  restorePredObjects(snap);
+  // preds only means something for top-level scheduling — clear it since the task is now
+  // scheduled purely by its position within the new parent's sub-task list.
+  moved.preds = '';
+  target.t.subtasks.push(moved);
+  target.t.expanded = true;
+  createAll();
+}
+function reorderCriticalTask(from,to){
+  if(from===to || from<0 || to<0 || from>=criticalTasks.length || to>=criticalTasks.length) return;
+  const arr = criticalTasks;
+  const snap = capturePredObjects();
+  const [item] = arr.splice(from,1);
+  arr.splice(to,0,item);
+  restorePredObjects(snap);
+  createAll();
+}
+function reorderFeedingChain(from,to){
+  if(from===to || from<0 || to<0 || from>=feedingChains.length || to>=feedingChains.length) return;
+  const arr = feedingChains;
+  const snap = capturePredObjects();
+  const [item] = arr.splice(from,1);
+  arr.splice(to,0,item);
+  restorePredObjects(snap);
+  createAll();
+}
+function dragStartRow(kind,i){ dragSrcKind = kind; dragSrcIndex = i; }
+function dragOverRow(e){ e.preventDefault(); }
+function dropRow(kind,i){
+  if(dragSrcKind===kind && dragSrcIndex!==null && dragSrcIndex!==i){
+    if(kind==='crit') reorderCriticalTask(dragSrcIndex, i); else reorderFeedingChain(dragSrcIndex, i);
+  }
+  dragSrcKind = null; dragSrcIndex = null;
+}
+function snapshotState(){
+  return JSON.stringify({meta, lookahead, daily, readiness_, zoomPct, criticalTasks, feedingChains, vendorPayments});
+}
+function restoreState(snap){
+  const s = JSON.parse(snap);
+  suppressSnapshot = true;
+  meta = s.meta; lookahead = s.lookahead; daily = s.daily; readiness_ = s.readiness_||{days:7}; zoomPct = s.zoomPct||100;
+  criticalTasks = s.criticalTasks; feedingChains = s.feedingChains; vendorPayments = s.vendorPayments;
+  createAll();
+  suppressSnapshot = false;
+  renderUndoRedoState();
+}
+function pushHistory(){
+  if(suppressSnapshot) return;
+  const snap = snapshotState();
+  if(historyStack[historyPos]===snap) return;
+  historyStack = historyStack.slice(0, historyPos+1);
+  historyStack.push(snap);
+  historyPos = historyStack.length-1;
+  if(historyStack.length>100){ historyStack.shift(); historyPos--; }
+  renderUndoRedoState();
+}
+function scheduleSnapshot(){
+  if(suppressSnapshot) return;
+  clearTimeout(snapTimer);
+  snapTimer = setTimeout(pushHistory, 600);
+}
+function resetHistory(){
+  historyStack = [snapshotState()];
+  historyPos = 0;
+  renderUndoRedoState();
+}
+function undo(){
+  clearTimeout(snapTimer);
+  pushHistory();
+  if(historyPos>0){ historyPos--; restoreState(historyStack[historyPos]); }
+}
+function redo(){
+  clearTimeout(snapTimer);
+  if(historyPos<historyStack.length-1){ historyPos++; restoreState(historyStack[historyPos]); }
+}
+function renderUndoRedoState(){
+  const u = document.getElementById('btn-undo'); if(u) u.disabled = historyPos<=0;
+  const r = document.getElementById('btn-redo'); if(r) r.disabled = historyPos>=historyStack.length-1;
+}
+function resetAll(){
+  const s = JSON.parse(origState);
+  suppressSnapshot = true;
+  meta = s.meta; lookahead = s.lookahead; daily = s.daily; readiness_ = s.readiness_||{days:7}; zoomPct = s.zoomPct||100;
+  criticalTasks = s.criticalTasks; feedingChains = s.feedingChains; vendorPayments = s.vendorPayments;
+  syncUrl = s.syncUrl||''; autoSync = s.autoSync||false;
+  projectExists = false; // sample data is local-only until "Create project" is clicked again
+  createAll();
+  suppressSnapshot = false;
+  resetHistory();
+}
+// Clears everything to a blank slate so this same file can be reused for a brand new project —
+// unlike resetAll() (which restores THIS file's original baked-in sample data), this empties
+// meta, tasks, chains and payments. Keeps syncUrl/autoSync so the same Apps Script endpoint
+// doesn't need to be re-pasted — sync just starts writing to a NEW Sheet once the Project name
+// (in Project details) is changed to something the backend hasn't seen before.
+function newProject(){
+  if(!confirm('Clear all tasks, dates and project details to start a brand new project in this file? This cannot be undone (use Save data first if you want to keep a backup).')) return;
+  clearTimeout(syncTimer); // cancel any auto-sync still queued for the project we're leaving
+  clearTimeout(fallbackRetryTimer);
+  syncDirty = false;
+  suppressSnapshot = true;
+  meta = {name:'', client:'', location:'', start:new Date().toISOString().slice(0,10), deliveryDate:'', dayStart:'08:00', qaLink:'', team: emptyTeam()};
+  lookahead = {from: new Date().toISOString().slice(0,10), days: 3};
+  readiness_ = {days: 7};
+  daily = {date: (()=>{ const d=new Date(); d.setDate(d.getDate()+1); return d.toISOString().slice(0,10); })()};
+  zoomPct = 100;
+  criticalTasks = [];
+  feedingChains = [];
+  vendorPayments = [];
+  lastSheetUrl = '';
+  projectExists = false; // new/untitled project — nothing gets created until "Create project" is clicked
+  createAll();
+  suppressSnapshot = false;
+  resetHistory();
+}
+// ---------------- Google Sheet sync ----------------
+// Builds the payload sent to the Apps Script backend. Runs schedule() first so every task carries
+// fresh start/end day-offsets, then attaches calendar-date strings and top-level KPIs so the Sheet
+// side never has to re-implement the CCPM scheduling logic itself — it just formats what it's given.
+function buildSyncPayload(){
+  const {chainSum, completionBuffer, total} = schedule();
+  function withDates(t){
+    const out = Object.assign({}, t, {
+      startDate: fmtISO(dateAt(t.start)), endDate: fmtISO(dateAt(t.end)),
+      delayDays: delayDays(t),
+      variance: (t.act===''||t.act==null) ? '' : ((Number(t.act)||0)-(Number(t.plan)||0))
+    });
+    if(hasSub(t)) out.subtasks = t.subtasks.map(withDates);
+    return out;
+  }
+  const crit = criticalTasks.map(withDates);
+  const feed = feedingChains.map(fc => ({mergeIndex: fc.mergeIndex, tasks: fc.tasks.map(withDates)}));
+  // mirrors the Summary tab's "Dashboard" cards (Health, Tasks, Progress by phase, Time, Cost,
+  // Workload by owner) as plain values, so the Sheet shows the same text the web tool shows.
+  const m = healthMetrics();
+  const leaves = allLeafTasks();
+  const statusCounts = {done:0, progress:0, overdue:0, notstarted:0};
+  leaves.forEach(t => statusCounts[overallStatus(t)]++);
+  const phaseProgress = criticalTasks.filter(hasSub).map(t => ({name:t.name, pct: fmt(t.pct||0)}));
+  const byOwner = {};
+  leaves.forEach(t => {
+    const owner = (t.owner||'').trim() || 'Unassigned';
+    if(!byOwner[owner]) byOwner[owner] = {done:0, remaining:0, overdue:0};
+    const s = overallStatus(t);
+    if(s==='done') byOwner[owner].done++;
+    else if(s==='overdue') byOwner[owner].overdue++;
+    else byOwner[owner].remaining++;
+  });
+  const workload = Object.entries(byOwner).map(([name,c]) => ({name, ...c, total:c.done+c.remaining+c.overdue})).sort((a,b)=>b.total-a.total);
+  const dashboard = {
+    health: {
+      timeStatus: Math.abs(m.timeDiff) < 1 ? 'On schedule' : (m.timeDiff >= 0 ? `${m.timeDiff.toFixed(0)}% ahead of schedule` : `${Math.abs(m.timeDiff).toFixed(0)}% behind schedule`),
+      tasksRemaining: m.remainingCount, tasksOverdue: m.overdueCount,
+      progressPct: m.weightedPct.toFixed(0),
+      costPlan: m.planTot, costActual: m.actTot
+    },
+    statusCounts, totalTasks: leaves.length, phaseProgress,
+    time: {plannedPct: m.pctTime.toFixed(0), actualPct: m.weightedPct.toFixed(0), diffPct: m.timeDiff.toFixed(0)},
+    workload
+  };
+  const statusLabel = {done:'Done', progress:'In progress', overdue:'Overdue', notstarted:'Not started'};
+  // mirrors the "3 days planning" tab — same lookaheadRows() the UI itself renders from.
+  const lookaheadList = lookaheadRows().rows.map(r => ({
+    num: taskNumber(r.kind, r.i, r.si), name: r.t.name, type: r.type,
+    startDate: fmtISO(dateAt(r.t.start)), endDate: fmtISO(dateAt(r.t.end)),
+    status: statusLabel[overallStatus(r.t)], owner: r.t.owner || '', notes: r.t.notes || ''
+  }));
+  // mirrors the "Daily follow-up" tab for the tool's currently-set daily.date.
+  const today_ = new Date(); today_.setHours(0,0,0,0);
+  const dailyList = dailyRows(daily.date).map(r => ({
+    num: taskNumber(r.kind, r.i, r.si), name: r.t.name,
+    shift: r.t.shift==='1' ? 'First half' : (r.t.shift==='2' ? 'Second half' : 'Unassigned'),
+    overdue: r.overdue, status: dailyStatus(r.t, today_).label,
+    owner: r.t.owner || '', followUp: followOwner(r.t, today_)==='pc' ? 'Process coordinator' : 'EA',
+    notes: r.t.notes || ''
+  }));
+  // mirrors the "Material & Resource" tab's readiness table (upcoming-task info/material/labour
+  // checklist status) — the vendor-payments table is added separately below.
+  const readinessRowsData = readinessRows();
+  const readinessList = readinessRowsData.rows.map(r => ({
+    num: taskNumber(r.kind, r.i, r.si), name: r.t.name, type: r.type,
+    startDate: fmtISO(dateAt(r.t.start)),
+    infoReady: !!r.t.infoReady, materialReady: !!r.t.materialReady, labourReady: !!r.t.labourReady,
+    status: readinessStatus(r.t, r.psD, readinessRowsData.today).label
+  }));
+  // full role labels (not the internal short keys like 'pm'/'ss') — same rows the Summary
+  // tab's own "Project team" table shows, in the same order.
+  const teamRows = teamRoles.map(([k,label]) => ({
+    role: label, name: (meta.team[k]||{}).name || '', phone: (meta.team[k]||{}).phone || ''
+  }));
+  return {
+    meta, team: meta.team, teamRows,
+    kpis: {
+      chainSumDays: fmt(chainSum), completionBufferDays: fmt(completionBuffer),
+      totalDays: fmt(total), calculatedCompletionDate: fmtISO(dateAt(total)),
+      promisedDeliveryDate: meta.deliveryDate || ''
+    },
+    dashboard,
+    criticalTasks: crit, feedingChains: feed, vendorPayments,
+    lookahead, daily, lookaheadList, dailyList, readinessList,
+    // the exact editable state (same shape exportJSON() saves) — stored in the Sheet's hidden
+    // _data tab so the "Switch project" dropdown can load this project back into the tool later.
+    rawState: JSON.stringify({meta, lookahead, daily, readiness_, zoomPct, criticalTasks, feedingChains, vendorPayments, syncUrl, autoSync}),
+    syncedAt: new Date().toISOString()
+  };
+}
+function fmtISO(d){ return d.toISOString().slice(0,10); }
+// button reads "Create project" until a Sheet actually exists for this project, then flips to
+// "Sync now" — keeps the wording honest about what clicking it will do.
+function renderSyncButton(){
+  const btn = document.getElementById('sync-btn'); if(!btn) return;
+  if(projectExists){
+    btn.innerHTML = '<i class="ti ti-cloud-upload" style="font-size:14px; vertical-align:-2px; margin-right:4px;"></i>Sync now';
+    btn.title = 'Push current data to the Google Sheet now';
+  } else {
+    btn.innerHTML = '<i class="ti ti-cloud-upload" style="font-size:14px; vertical-align:-2px; margin-right:4px;"></i>Create project';
+    btn.title = 'Create the Google Sheet for this project and push current data to it';
+  }
+}
+function renderSyncStatus(msg, isErr){
+  renderSyncButton();
+  const el = document.getElementById('sync-status'); if(!el) return;
+  const linkHtml = lastSheetUrl ? ` · <a href="${escHtml(lastSheetUrl)}" target="_blank" rel="noopener">Open Sheet</a>` : '';
+  if(msg){ el.innerHTML = escHtml(msg) + linkHtml; el.style.color = isErr ? 'var(--red)' : 'var(--green)'; return; }
+  if(!projectExists){ el.innerHTML = (syncUrl ? 'Not created yet — click "Create project" when ready' : '') + linkHtml; el.style.color = 'var(--text-secondary)'; return; }
+  el.innerHTML = (lastSyncAt ? ('Last synced ' + lastSyncAt) : (syncUrl ? 'Not synced yet' : '')) + linkHtml;
+  el.style.color = 'var(--text-secondary)';
+}
+// called from update()/every edit — pushes to the Sheet almost immediately (short debounce so a
+// fast burst of keystrokes collapses into one request instead of one per keystroke). Gated on
+// projectExists so editing a not-yet-created project never silently spawns a Sheet on its own —
+// that only happens via an explicit "Create project" click.
+function scheduleAutoSync(){
+  if(!autoSync || !projectExists || !syncUrl || !meta.name || !meta.name.trim()) return;
+  clearTimeout(syncTimer);
+  syncTimer = setTimeout(() => syncToSheet(false), 800);
+}
+let lastSheetUrl = '';
+// Apps Script Web Apps sometimes redirect the POST response through script.googleusercontent.com,
+// and that redirected response occasionally comes back without proper CORS headers — a known,
+// intermittent Google-side quirk, not a config problem. A plain network failure (not an ok:false
+// from the server) is usually just that quirk, so retry a few times with a short backoff before
+// giving up — most of these clear up on the very next attempt.
+// WRITE PATH: submits through the hidden <form>/<iframe> in the page (see the HTML above the
+// <script> tag). A <form> submission is a normal browser navigation, not a fetch()/XHR call, so
+// it is NEVER subject to CORS blocking — unlike fetch(), it reliably reaches the Apps Script
+// backend even on networks/browsers where fetch() to script.google.com gets silently blocked.
+// We can't read a response through the iframe, so right after submitting we do a small, separate
+// GET (fetch, ?action=status) to confirm the write landed and grab the Sheet's URL — GETs have
+// been reliable in testing even where POST fetches weren't. If that confirmation GET itself fails,
+// the data was still very likely delivered (the form submission doesn't depend on it), so we show
+// an honest "sent but unconfirmed" status rather than a false failure.
+function submitViaHiddenForm_(payloadStr){
+  return new Promise((resolve) => {
+    const form = document.getElementById('sync-form');
+    const iframe = document.querySelector('iframe[name="sync-frame"]');
+    const payloadEl = document.getElementById('sync-form-payload');
+    if(!form || !iframe || !payloadEl){ resolve(); return; }
+    form.action = syncUrl;
+    payloadEl.value = payloadStr;
+    let done = false;
+    const finish = () => { if(done) return; done = true; iframe.removeEventListener('load', onLoad); resolve(); };
+    const onLoad = () => finish();
+    iframe.addEventListener('load', onLoad);
+    // Fallback in case the load event doesn't fire reliably for this cross-origin response —
+    // never block the UI waiting forever on it. Kept generous (20s) because a large project's
+    // sync can genuinely take several seconds server-side; resolving too early here would let a
+    // second sync start while the first is still mid-write, which is exactly what causes rows to
+    // land jumbled/misaligned on the Sheet (the backend now also locks against that server-side,
+    // but avoiding the overlap here too keeps things snappier).
+    setTimeout(finish, 20000);
+    form.submit();
+  });
+}
+async function syncToSheet(manual, attempt){
+  attempt = attempt || 1;
+  if(!syncUrl){ if(manual) renderSyncStatus('Paste the Web App URL first', true); return; }
+  if(!meta.name || !meta.name.trim()){ if(manual) renderSyncStatus('Set a Project name first (Summary tab) — nothing is created until then', true); return; }
+  if(syncInFlight) return;
+  syncInFlight = true;
+  if(manual) renderSyncStatus(projectExists ? 'Syncing…' : 'Creating…');
+  else if(attempt > 1) renderSyncStatus('Syncing… (retry ' + attempt + '/3)');
+  const payload = JSON.stringify(buildSyncPayload());
+  try {
+    await submitViaHiddenForm_(payload);
+    // Best-effort confirmation — a lightweight GET that just checks the Sheet exists and grabs its URL.
+    let confirmed = false;
+    try {
+      const statusUrl = syncUrl + (syncUrl.includes('?') ? '&' : '?') + 'action=status&project=' + encodeURIComponent(meta.name);
+      const res = await fetch(statusUrl);
+      const data = await res.json();
+      if(data && data.ok && data.exists){ confirmed = true; if(data.url) lastSheetUrl = data.url; }
+    } catch(confirmErr){ /* form submission likely still went through even if this confirmation didn't */ }
+    projectExists = true;
+    lastSyncAt = new Date().toLocaleTimeString('en-IN', {hour:'2-digit', minute:'2-digit'});
+    clearTimeout(fallbackRetryTimer);
+    renderSyncStatus(confirmed ? ('Synced ' + lastSyncAt) : ('Sent ' + lastSyncAt + ' — could not confirm, check the Sheet'));
+  } catch(err){
+    syncInFlight = false;
+    if(attempt < 3){
+      renderSyncStatus('Sync hiccup, retrying… (' + attempt + '/3)', true);
+      setTimeout(() => syncToSheet(manual, attempt + 1), 1200 * attempt);
+      return;
+    }
+    renderSyncStatus('Sync failed after 3 tries: ' + err.message + ' — retrying again in 1 min (or click Sync now)', true);
+    // 3 quick retries all failed — instead of giving up, try once more in a minute. By the time
+    // this fires, buildSyncPayload() (called fresh inside syncToSheet) picks up whatever is
+    // CURRENTLY in the fields, not whatever was there a minute ago, so it always sends the latest
+    // values rather than stale/old data.
+    clearTimeout(fallbackRetryTimer);
+    fallbackRetryTimer = setTimeout(() => syncToSheet(false), 60000);
+  } finally {
+    syncInFlight = false;
+  }
+}
+let projectListFetched = false;
+async function refreshProjectList(){
+  const sel = document.getElementById('project-list');
+  const statusEl = document.getElementById('project-list-status');
+  if(!syncUrl){ if(statusEl) statusEl.textContent = 'Paste the Web App URL first'; return; }
+  if(statusEl) statusEl.textContent = 'Loading…';
+  try {
+    const url = syncUrl + (syncUrl.includes('?') ? '&' : '?') + 'action=list';
+    const data = await fetchJsonRetry_(url);
+    if(!data || !data.ok){ if(statusEl){ statusEl.textContent = 'Could not load list: ' + (data&&data.error?data.error:'unknown error'); statusEl.style.color='var(--red)'; } return; }
+    if(sel){
+      const current = meta.name || '';
+      sel.innerHTML = '<option value="">— choose a synced project —</option>' +
+        data.projects.map(p => `<option value="${escHtml(p.name)}" ${p.name===current?'selected':''}>${escHtml(p.name)}</option>`).join('');
+    }
+    if(statusEl){ statusEl.textContent = data.projects.length ? `${data.projects.length} project(s) found` : 'No synced projects yet'; statusEl.style.color = 'var(--text-secondary)'; }
+  } catch(err){
+    if(statusEl){ statusEl.textContent = 'Could not load list: ' + err.message; statusEl.style.color = 'var(--red)'; }
+  }
+}
+async function onProjectPicked(name){
+  if(!name) return;
+  if(name === meta.name){ return; } // already on this project
+  if(!confirm(`Load "${name}" from the Sheet? Your current unsaved edits in this tool will be replaced.`)){
+    const sel = document.getElementById('project-list'); if(sel) sel.value = meta.name || '';
+    return;
+  }
+  const statusEl = document.getElementById('project-list-status');
+  if(statusEl){ statusEl.textContent = 'Loading ' + name + '…'; statusEl.style.color = 'var(--text-secondary)'; }
+  try {
+    const url = syncUrl + (syncUrl.includes('?') ? '&' : '?') + 'action=load&project=' + encodeURIComponent(name);
+    const data = await fetchJsonRetry_(url);
+    if(!data || !data.ok || !data.rawState){
+      const errMsg = 'Could not load "'+name+'": ' + (data&&data.error?data.error:'no data found') + '\n\nYou are STILL on "'+(meta.name||'(untitled)')+'" — nothing changed. If this keeps happening, redeploy the Apps Script as a new version (Deploy > Manage deployments > edit > New version > Deploy).';
+      if(statusEl){ statusEl.textContent = 'Load failed — see popup'; statusEl.style.color='var(--red)'; }
+      const sel = document.getElementById('project-list'); if(sel) sel.value = meta.name || '';
+      alert(errMsg);
+      return;
+    }
+    const s = JSON.parse(data.rawState);
+    suppressSnapshot = true;
+    meta = s.meta; criticalTasks = s.criticalTasks; feedingChains = s.feedingChains;
+    lookahead = s.lookahead || {from: new Date().toISOString().slice(0,10), days: 3};
+    daily = s.daily || {date: new Date().toISOString().slice(0,10)};
+    readiness_ = s.readiness_ || {days: 7};
+    zoomPct = s.zoomPct || 100;
+    vendorPayments = s.vendorPayments || [];
+    if(!meta.dayStart) meta.dayStart = '08:00';
+    if(meta.qaLink===undefined) meta.qaLink = '';
+    if(!meta.team) meta.team = emptyTeam();
+    // keep this tool's own syncUrl/autoSync — don't let a loaded project silently change them
+    lastSheetUrl = '';
+    projectExists = true; // switched to a project that already has a Sheet
+    createAll();
+    suppressSnapshot = false;
+    resetHistory();
+    if(statusEl){ statusEl.textContent = 'Loaded ' + name; statusEl.style.color = 'var(--green)'; }
+  } catch(err){
+    if(statusEl){ statusEl.textContent = 'Load failed — see popup'; statusEl.style.color = 'var(--red)'; }
+    const sel = document.getElementById('project-list'); if(sel) sel.value = meta.name || '';
+    alert('Could not load "'+name+'": ' + err.message + '\n\nYou are STILL on "'+(meta.name||'(untitled)')+'" — nothing changed.');
+  }
+}
+function exportJSON(){
+  const blob = new Blob([JSON.stringify({meta, lookahead, daily, readiness_, zoomPct, criticalTasks, feedingChains, vendorPayments, syncUrl, autoSync}, null, 2)], {type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'DB_Planning_Project_data.json';
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+function importJSON(evt){
+  const f = evt.target.files[0];
+  if(!f) return;
+  const r = new FileReader();
+  r.onload = e => {
+    try {
+      const s = JSON.parse(e.target.result);
+      if(s.meta && s.criticalTasks && s.feedingChains){
+        meta = s.meta; criticalTasks = s.criticalTasks; feedingChains = s.feedingChains;
+        lookahead = s.lookahead || {from: new Date().toISOString().slice(0,10), days: 3};
+        daily = s.daily || {date: new Date().toISOString().slice(0,10)};
+        readiness_ = s.readiness_ || {days: 7};
+        zoomPct = s.zoomPct || 100;
+        syncUrl = s.syncUrl || ''; autoSync = s.autoSync || false;
+        vendorPayments = s.vendorPayments || [];
+        // older save files may carry a "linked" or "between" field from a previous version of the
+        // tool that tied a payment to a Gantt marker — that feature was removed, so just drop it.
+        vendorPayments.forEach(v => { delete v.linked; delete v.between; });
+        if(!meta.dayStart) meta.dayStart = '08:00';
+        if(meta.qaLink===undefined) meta.qaLink = '';
+        if(!meta.team) meta.team = emptyTeam();
+        teamRoles.forEach(([k])=>{ if(!meta.team[k]) meta.team[k]={name:'',phone:''}; });
+        // fcMergeIndex is only passed for a feeding chain's own top-level task — used to migrate an
+        // older save file's predRef/rel (critical tasks) or mergeIndex/rel (feeding chains) into the
+        // new unified preds string, so existing dependencies aren't lost on import. The old feeding
+        // model scheduled backward from its merge target; the new model schedules forward, so
+        // "merges into task N" becomes "starts once task N finishes" (N+1 in unified numbering, FS).
+        function fixTask(t, fcMergeIndex){
+          if(!t.subtasks) t.subtasks=[];
+          if(t.expanded===undefined) t.expanded=false;
+          if(t.shift===undefined) t.shift='';
+          if(t.preds===undefined){
+            if(fcMergeIndex!==undefined && fcMergeIndex!==null) t.preds = (Number(fcMergeIndex)+1)+(t.rel||'FS');
+            else t.preds = t.predRef ? (Number(t.predRef)+(t.rel||'FS')) : '';
+          }
+          if(t.pct===undefined) t.pct=0; if(t.infoReady===undefined) t.infoReady=false; if(t.materialReady===undefined) t.materialReady=false; if(t.labourReady===undefined) t.labourReady=false; if(t.link===undefined) t.link=''; if(t.vendor===undefined) t.vendor=''; if(!t.taskType) t.taskType='critical'; if(t.buffer===undefined) t.buffer=0;
+          delete t.followBy; delete t.rel; delete t.predRef;
+          t.subtasks.forEach(st => fixTask(st));
+        }
+        criticalTasks.forEach(t => fixTask(t));
+        feedingChains.forEach(fc => fixTask(fc.tasks[0], fc.mergeIndex));
+        suppressSnapshot = true;
+        createAll();
+        suppressSnapshot = false;
+        resetHistory();
+      }
+      else alert('Not a DB Planning Project data file.');
+    } catch(err){ alert('Could not read file: '+err.message); }
+  };
+  r.readAsText(f);
+  evt.target.value = '';
+}
+
+if(typeof window.addEventListener === 'function'){
+  window.addEventListener('resize', () => { drawDependencyArrows(); fixLabelOverlaps(); drawLookaheadDependencyArrows(lookaheadRows().rows); });
+}
+// the sticky-right column is pinned to the visible edge of the scrolled viewport, not a fixed
+// point on the timeline, so a horizontal scroll can change which labels collide with it —
+// re-check on every scroll of the Gantt area.
+{
+  const gs = document.getElementById('ganttScroll');
+  if(gs && typeof gs.addEventListener === 'function'){
+    gs.addEventListener('scroll', () => fixLabelOverlaps());
+  }
+}
+// Restore from this device's local backup BEFORE the first render, so reloading the page (or
+// losing internet, or Google Sheet sync being down) never loses what was being worked on — this
+// takes priority over the baked-in sample data above. It intentionally does NOT auto-pull from
+// the Google Sheet on load anymore (that used to silently overwrite local edits with whatever was
+// last successfully synced, which could be older than what's on screen) — the Sheet is still kept
+// up to date via the normal auto-sync, and can be pulled back deliberately via "Switch project".
+(function restoreLocalOnLoad(){
+  const s = loadLocal();
+  if(!s || !s.meta) return;
+  meta = s.meta;
+  lookahead = s.lookahead || lookahead;
+  daily = s.daily || daily;
+  readiness_ = s.readiness_ || readiness_;
+  zoomPct = s.zoomPct || zoomPct;
+  criticalTasks = s.criticalTasks || criticalTasks;
+  feedingChains = s.feedingChains || feedingChains;
+  vendorPayments = s.vendorPayments || vendorPayments;
+  if(s.syncUrl) syncUrl = s.syncUrl;
+  if(s.autoSync !== undefined) autoSync = s.autoSync;
+  if(!meta.dayStart) meta.dayStart = '08:00';
+  if(meta.qaLink===undefined) meta.qaLink = '';
+  if(!meta.team) meta.team = emptyTeam();
+  // if this project name previously synced successfully in this browser, keep treating it as
+  // "already exists" so auto-sync resumes normally instead of demanding "Create project" again
+  projectExists = true;
+})();
+createAll();
+resetHistory();
+applyTheme();
+// Safety-net resync: every 10 seconds, push the CURRENT full state to the Sheet (if auto-sync is
+// on and the project already exists) — independent of the per-edit debounce. This catches the
+// rare case where a value was still mid-edit right as a debounced sync fired and so didn't make
+// it into that particular push: within ~10s, the next automatic push always carries whatever is
+// actually in the fields at that moment, without needing to touch/re-edit anything manually.
+setInterval(() => {
+  if(autoSync && projectExists && syncUrl && !syncInFlight) syncToSheet(false);
+}, 10000);
+document.addEventListener('keydown', function(ev){
+  const mod = ev.ctrlKey || ev.metaKey;
+  if(!mod) return;
+  const key = ev.key.toLowerCase();
+  if(key==='z' && !ev.shiftKey){ ev.preventDefault(); undo(); }
+  else if(key==='y' || (key==='z' && ev.shiftKey)){ ev.preventDefault(); redo(); }
+});
+</script>
+</body>
+</html>
