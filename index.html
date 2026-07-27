@@ -2727,14 +2727,14 @@ function renderSyncStatus(msg, isErr){
   el.innerHTML = (lastSyncAt ? ('Last synced ' + lastSyncAt) : (syncUrl ? 'Not synced yet' : '')) + linkHtml;
   el.style.color = 'var(--text-secondary)';
 }
-// called from update()/every edit — just marks that a push is owed. The actual push happens on
-// the fixed 30-second interval set up below, so rapid typing doesn't spam the Apps Script endpoint
-// (each sync rewrites every sheet tab, which isn't free). Gated on projectExists so editing a
-// not-yet-created project never silently spawns a Sheet on its own — that only happens via an
-// explicit "Create project" click.
+// called from update()/every edit — pushes to the Sheet almost immediately (short debounce so a
+// fast burst of keystrokes collapses into one request instead of one per keystroke). Gated on
+// projectExists so editing a not-yet-created project never silently spawns a Sheet on its own —
+// that only happens via an explicit "Create project" click.
 function scheduleAutoSync(){
   if(!autoSync || !projectExists || !syncUrl || !meta.name || !meta.name.trim()) return;
-  syncDirty = true;
+  clearTimeout(syncTimer);
+  syncTimer = setTimeout(() => syncToSheet(false), 800);
 }
 let lastSheetUrl = '';
 // Apps Script Web Apps sometimes redirect the POST response through script.googleusercontent.com,
@@ -2742,6 +2742,14 @@ let lastSheetUrl = '';
 // intermittent Google-side quirk, not a config problem. A plain network failure (not an ok:false
 // from the server) is usually just that quirk, so retry a few times with a short backoff before
 // giving up — most of these clear up on the very next attempt.
+// Apps Script Web Apps sometimes redirect the POST response through script.googleusercontent.com,
+// and that redirected response occasionally comes back without proper CORS headers — a known,
+// intermittent Google-side quirk, not a config problem. CORS only blocks the BROWSER from READING
+// the reply — it does not stop the request from reaching Google's server, so the data usually
+// still lands on the Sheet even when the browser reports "failed to fetch". To make that reliable
+// instead of just hoping, if the normal (readable) request errors out we immediately fire a
+// second request in 'no-cors' mode: the browser sends it and gets an opaque response back (we
+// can't read success/sheetUrl from it), but the write to the Sheet still goes through.
 async function syncToSheet(manual, attempt){
   attempt = attempt || 1;
   if(!syncUrl){ if(manual) renderSyncStatus('Paste the Web App URL first', true); return; }
@@ -2750,10 +2758,11 @@ async function syncToSheet(manual, attempt){
   syncInFlight = true;
   if(manual) renderSyncStatus(projectExists ? 'Syncing…' : 'Creating…');
   else if(attempt > 1) renderSyncStatus('Syncing… (retry ' + attempt + '/3)');
+  const payload = JSON.stringify(buildSyncPayload());
   try {
     // No custom headers on purpose — a plain string body keeps this a CORS "simple request" so the
     // Apps Script Web App doesn't need to handle an OPTIONS preflight (see Code.gs notes).
-    const res = await fetch(syncUrl, {method:'POST', body: JSON.stringify(buildSyncPayload())});
+    const res = await fetch(syncUrl, {method:'POST', body: payload});
     const data = await res.json();
     if(data && data.ok){
       projectExists = true;
@@ -2764,13 +2773,22 @@ async function syncToSheet(manual, attempt){
       renderSyncStatus('Sync failed: ' + (data && data.error ? data.error : 'unknown error'), true);
     }
   } catch(err){
-    syncInFlight = false;
-    if(attempt < 3){
-      renderSyncStatus('Sync hiccup, retrying… (' + attempt + '/3)', true);
-      setTimeout(() => syncToSheet(manual, attempt + 1), 1500 * attempt);
-      return;
+    // Readable fetch failed — try a no-cors fire-and-forget copy so the write still has a good
+    // chance of reaching the Sheet even though we can't confirm it from here.
+    try {
+      await fetch(syncUrl, {method:'POST', body: payload, mode:'no-cors'});
+      projectExists = true;
+      lastSyncAt = new Date().toLocaleTimeString('en-IN', {hour:'2-digit', minute:'2-digit'});
+      renderSyncStatus('Sent ' + lastSyncAt + ' — no confirmation from Google, verify on the Sheet');
+    } catch(err2){
+      syncInFlight = false;
+      if(attempt < 3){
+        renderSyncStatus('Sync hiccup, retrying… (' + attempt + '/3)', true);
+        setTimeout(() => syncToSheet(manual, attempt + 1), 1500 * attempt);
+        return;
+      }
+      renderSyncStatus('Sync failed after 3 tries: ' + err2.message + ' — click Sync now to try again', true);
     }
-    renderSyncStatus('Sync failed after 3 tries: ' + err.message + ' — click Sync now to try again', true);
   } finally {
     syncInFlight = false;
   }
@@ -2916,16 +2934,6 @@ if(typeof window.addEventListener === 'function'){
 createAll();
 resetHistory();
 applyTheme();
-// Every 30 seconds, push to the Sheet if something changed since the last successful sync
-// (syncDirty) and auto-sync is on for an already-created project. This is the actual auto-sync
-// trigger — scheduleAutoSync() (called from every edit) only sets syncDirty, it never syncs
-// directly, so rapid edits collapse into at most one push per 30s window instead of one per change.
-setInterval(() => {
-  if(syncDirty && autoSync && projectExists && syncUrl && !syncInFlight){
-    syncDirty = false;
-    syncToSheet(false);
-  }
-}, 30000);
 document.addEventListener('keydown', function(ev){
   const mod = ev.ctrlKey || ev.metaKey;
   if(!mod) return;
