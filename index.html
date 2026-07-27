@@ -110,7 +110,7 @@
       <button id="btn-bw" onclick="toggleGrayscale()" class="no-print" title="Toggle black &amp; white view (useful for printing or low-colour displays)" style="font-size:11px; padding:5px 9px; margin-top:1px; flex-shrink:0;"><i class="ti ti-contrast-2" style="font-size:14px;"></i></button>
       <button id="btn-theme" onclick="toggleTheme()" class="no-print" title="Switch between dark and light theme" style="font-size:11px; padding:5px 9px; margin-top:1px; flex-shrink:0;"><i class="ti ti-moon" style="font-size:14px;"></i></button>
       <div>
-        <div style="font-size:11px; font-weight:700; color:var(--gold); letter-spacing:1px;">DIAMETRIC BUILDS <span style="font-weight:400; color:var(--text-muted); letter-spacing:0;">· build 2026-07-27-pathscoped</span></div>
+        <div style="font-size:11px; font-weight:700; color:var(--gold); letter-spacing:1px;">DIAMETRIC BUILDS <span style="font-weight:400; color:var(--text-muted); letter-spacing:0;">· build 2026-07-27-newproject-template</span></div>
         <h1>DB Planning Project — critical chain planner &amp; tracker</h1>
         <div style="font-size:11.5px; color:var(--text-secondary); margin-top:2px;">Currently editing: <span id="active-project-badge" style="font-weight:600; color:var(--gold);"></span></div>
       </div>
@@ -122,7 +122,7 @@
       <button id="btn-undo" onclick="undo()" title="Undo (Ctrl+Z)" style="font-size:12px; padding:6px 12px;"><i class="ti ti-arrow-back-up" style="font-size:14px; vertical-align:-2px; margin-right:4px;"></i>Undo</button>
       <button id="btn-redo" onclick="redo()" title="Redo (Ctrl+Y)" style="font-size:12px; padding:6px 12px;"><i class="ti ti-arrow-forward-up" style="font-size:14px; vertical-align:-2px; margin-right:4px;"></i>Redo</button>
       <button onclick="resetAll()" style="font-size:12px; padding:6px 12px;" title="Restore this file's original sample data"><i class="ti ti-refresh" style="font-size:14px; vertical-align:-2px; margin-right:4px;"></i>Reset</button>
-      <button onclick="newProject()" style="font-size:12px; padding:6px 12px;" title="Clear everything to start a brand new project in this same file"><i class="ti ti-file-plus" style="font-size:14px; vertical-align:-2px; margin-right:4px;"></i>New project</button>
+      <button onclick="newProject()" style="font-size:12px; padding:6px 12px;" title="Start a new project — keeps the standard 135-task template pre-filled (reset to 0% progress), but clears the project name, client, location and dates for you to fill in"><i class="ti ti-file-plus" style="font-size:14px; vertical-align:-2px; margin-right:4px;"></i>New project</button>
       <span style="width:0.5px; height:22px; background:var(--border-strong); margin:0 2px;"></span>
       <div style="display:flex; align-items:center; gap:4px;" title="Quality assurance checklist — not a schedule task, just a reference link">
         <input type="text" id="qa-link" value="" placeholder="QA checklist link" oninput="meta.qaLink=this.value; scheduleAutoSync();" style="width:150px; font-size:12px; height:30px;">
@@ -2675,25 +2675,37 @@ function resetAll(){
   suppressSnapshot = false;
   resetHistory();
 }
-// Clears everything to a blank slate so this same file can be reused for a brand new project —
-// unlike resetAll() (which restores THIS file's original baked-in sample data), this empties
-// meta, tasks, chains and payments. Keeps syncUrl/autoSync so the same Apps Script endpoint
-// doesn't need to be re-pasted — sync just starts writing to a NEW Sheet once the Project name
-// (in Project details) is changed to something the backend hasn't seen before.
+// Starts a brand new project reusing THIS file's standard task template (the same 16-phase /
+// 135-task structure baked into it) — unlike resetAll() (which also restores the original
+// project's own name/client/dates), this blanks out just the project's IDENTITY (name, client,
+// location, dates) so you can rename/adjust the template's tasks for a new client without having
+// to re-type all 135 tasks from scratch every time. Keeps syncUrl/autoSync so the same Apps
+// Script endpoint doesn't need to be re-pasted — sync just starts writing to a NEW Sheet once the
+// Project name (in Project details) is changed to something the backend hasn't seen before.
 function newProject(){
-  if(!confirm('Clear all tasks, dates and project details to start a brand new project in this file? This cannot be undone (use Save data first if you want to keep a backup).')) return;
+  if(!confirm('Start a brand new project? This clears the Project name, client, location and dates, and resets progress/dates on every task — but keeps the standard task list (rename/adjust tasks as needed for this project). This cannot be undone (use Save data first if you want to keep a backup).')) return;
   clearTimeout(syncTimer); // cancel any auto-sync still queued for the project we're leaving
   clearTimeout(fallbackRetryTimer);
   syncDirty = false;
   suppressSnapshot = true;
-  meta = {name:'', client:'', location:'', start:new Date().toISOString().slice(0,10), deliveryDate:'', dayStart:'08:00', qaLink:'', team: emptyTeam()};
+  const s = JSON.parse(origState); // this file's baked-in standard template (tasks, buffers, budgets, etc.)
+  meta = Object.assign({}, s.meta, {name:'', client:'', location:'', deliveryDate:'', start:new Date().toISOString().slice(0,10), team: emptyTeam()});
   lookahead = {from: new Date().toISOString().slice(0,10), days: 3};
   readiness_ = {days: 7};
   daily = {date: (()=>{ const d=new Date(); d.setDate(d.getDate()+1); return d.toISOString().slice(0,10); })()};
   zoomPct = 100;
-  criticalTasks = [];
-  feedingChains = [];
+  criticalTasks = s.criticalTasks;
+  feedingChains = s.feedingChains;
   vendorPayments = [];
+  // wipe per-task progress/actuals so the template starts fresh for the new project, while
+  // keeping names/durations/budgets/owners/vendors/notes as the template defines them
+  function resetProgress(t){
+    t.pct = 0; t.act = ''; t.adate = ''; t.qcDone = false;
+    t.infoReady = false; t.materialReady = false; t.labourReady = false;
+    (t.subtasks||[]).forEach(resetProgress);
+  }
+  criticalTasks.forEach(resetProgress);
+  feedingChains.forEach(fc => fc.tasks.forEach(resetProgress));
   lastSheetUrl = '';
   projectExists = false; // new/untitled project — nothing gets created until "Create project" is clicked
   createAll();
