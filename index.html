@@ -158,17 +158,24 @@
       </div>
     </div>
 
+    <p style="font-size:13px; font-weight:600; color:var(--gold); margin:20px 0 8px; border-top:0.5px solid var(--border); padding-top:14px;">Saved on this device</p>
+    <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; font-size:12px;">
+      <span id="local-save-status" style="font-size:11.5px; color:var(--green); font-weight:600;"></span>
+    </div>
+    <p style="font-size:11px; color:var(--text-secondary); margin:4px 0 0; max-width:900px;">Every change is saved straight into this browser, instantly — this is what keeps your data from disappearing on reload, even with no internet or if Google Sheet sync below is having trouble. It's specific to this browser/device, so the Google Sheet sync below is what shares it elsewhere.</p>
+
     <p style="font-size:13px; font-weight:600; color:var(--gold); margin:20px 0 8px; border-top:0.5px solid var(--border); padding-top:14px;">Google Sheet sync</p>
     <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; font-size:12px; max-width:900px;">
       <input type="text" id="sync-url" placeholder="Paste Apps Script Web App URL (from the bundled Code.gs deployment)" oninput="syncUrl=this.value;" onchange="onSyncUrlSet();" style="flex:1; min-width:280px; height:28px; font-size:11.5px;">
       <button id="sync-btn" onclick="syncToSheet(true)" style="font-size:12px; padding:6px 12px;" title="Create the Google Sheet for this project and push current data to it"><i class="ti ti-cloud-upload" style="font-size:14px; vertical-align:-2px; margin-right:4px;"></i>Create project</button>
+      <button onclick="reloadFromSheet()" style="font-size:12px; padding:6px 12px;" title="Pull this project's latest saved data back from the Sheet — replaces what's on screen, so use this only if the Sheet has newer data than what's here"><i class="ti ti-cloud-download" style="font-size:14px; vertical-align:-2px; margin-right:4px;"></i>Reload from Sheet</button>
       <label id="sync-auto-label" style="display:flex; align-items:center; gap:5px; font-size:11.5px; color:var(--text-secondary);" title="Only takes effect once the project has been created (button on the left)">
         <input type="checkbox" id="sync-auto" onchange="autoSync=this.checked; if(autoSync && projectExists) syncToSheet(false);" style="width:auto; height:auto;">
         Auto-sync on every change
       </label>
       <span id="sync-status" style="font-size:11px; color:var(--text-secondary);"></span>
     </div>
-    <p style="font-size:11px; color:var(--text-secondary); margin:6px 0 0; max-width:900px;">One-time setup: paste <code>Code.gs</code> as a standalone Apps Script project, run <code>authorize()</code> once, deploy as a Web App ("Anyone" access), and paste the deployment URL above. Nothing is created on the Sheet until you click "Create project" — after that, "Auto-sync" (if ticked) checks every 30 seconds and pushes only if something changed, and the same button turns into "Sync now" for an immediate manual push. This way, typing a placeholder name or just trying the tool out doesn't spawn a real Google Sheet by itself. This same URL works for every project — each gets its own Sheet, auto-created inside a fixed Drive folder and auto-shared as "anyone with the link can view." After a sync, the link appears next to the status below.</p>
+    <p style="font-size:11px; color:var(--text-secondary); margin:6px 0 0; max-width:900px;">One-time setup: paste <code>Code.gs</code> as a standalone Apps Script project, run <code>authorize()</code> once, deploy as a Web App ("Anyone" access), and paste the deployment URL above. Nothing is created on the Sheet until you click "Create project" — after that, "Auto-sync" (if ticked) pushes shortly after every change, and the same button turns into "Sync now" for an immediate manual push. This way, typing a placeholder name or just trying the tool out doesn't spawn a real Google Sheet by itself. This tool no longer auto-loads from the Sheet on its own (that used to risk overwriting newer edits sitting only in this browser) — use "Reload from Sheet" above whenever you deliberately want the Sheet's copy instead. This same URL works for every project — each gets its own Sheet, auto-created inside a fixed Drive folder and auto-shared as "anyone with the link can view." After a sync, the link appears next to the status below.</p>
 
     <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-top:10px; font-size:12px;">
       <label style="color:var(--text-secondary);">Switch project</label>
@@ -401,6 +408,40 @@ let lastSyncAt = '';
 let syncDirty = false;
 // holds the timer for the "retry once more after 60s" fallback when the 3 quick retries all fail
 let fallbackRetryTimer = null;
+
+// ---------------- Local browser backup (always-on, independent of Google Sheet sync) ----------------
+// This is the primary guarantee that data never disappears from the page on reload — it works
+// even with no internet connection or if Google Sheet sync is failing entirely. Google Sheet sync
+// (elsewhere in this file) is a separate, secondary layer for backup/sharing across devices; this
+// local copy is what makes sure YOU never lose what you typed just by reloading or closing the tab.
+const LOCAL_KEY = 'ccpm_local_state_v1';
+let localSaveTimer = null;
+function scheduleLocalSave(){
+  clearTimeout(localSaveTimer);
+  localSaveTimer = setTimeout(saveLocal, 300);
+}
+function saveLocal(){
+  try {
+    const snap = JSON.stringify({meta, lookahead, daily, readiness_, zoomPct, criticalTasks, feedingChains, vendorPayments, syncUrl, autoSync});
+    localStorage.setItem(LOCAL_KEY, snap);
+    localStorage.setItem(LOCAL_KEY + '_savedAt', new Date().toISOString());
+    const el = document.getElementById('local-save-status');
+    if(el) el.textContent = 'Saved on this device ' + new Date().toLocaleTimeString('en-IN', {hour:'2-digit', minute:'2-digit'});
+  } catch(err){
+    // storage full/blocked (e.g. private browsing) — non-fatal, Google Sheet sync still covers backup
+    const el = document.getElementById('local-save-status');
+    if(el) el.textContent = 'Could not save locally (' + err.message + ') — relying on Google Sheet sync only';
+  }
+}
+function loadLocal(){
+  try {
+    const raw = localStorage.getItem(LOCAL_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch(err){ return null; }
+}
+function clearLocalBackup(){
+  try { localStorage.removeItem(LOCAL_KEY); localStorage.removeItem(LOCAL_KEY + '_savedAt'); } catch(err){}
+}
 // projectExists gates auto-sync: nothing is pushed to the Sheet until the person explicitly
 // clicks "Create project" (or loads/switches to a project that already has a Sheet). This stops
 // a placeholder name typed while trying the tool out from silently spawning a real Google Sheet.
@@ -1277,6 +1318,7 @@ function update(){
   scheduleSnapshot();
   renderSyncStatus();
   scheduleAutoSync();
+  scheduleLocalSave();
 }
 
 function taskStatus(t, winStart, winEnd, today){
@@ -2252,11 +2294,11 @@ function createAll(){
   const syncAutoEl = document.getElementById('sync-auto'); if(syncAutoEl) syncAutoEl.checked = !!autoSync;
   const badgeEl = document.getElementById('active-project-badge'); if(badgeEl) badgeEl.textContent = meta.name || '(untitled — set a Project name)';
   renderSyncStatus();
-  if(syncUrl && !projectListFetched){ projectListFetched = true; refreshProjectList(); autoPullLatest(); }
+  if(syncUrl && !projectListFetched){ projectListFetched = true; refreshProjectList(); }
   update();
 }
 function onSyncUrlSet(){
-  if(syncUrl && !projectListFetched){ projectListFetched = true; refreshProjectList(); autoPullLatest(); }
+  if(syncUrl && !projectListFetched){ projectListFetched = true; refreshProjectList(); }
 }
 // On first load (or right after pasting the Web App URL), silently pulls this project's most
 // recent data from its Sheet — so reopening this same static HTML file always picks up whatever
@@ -2297,6 +2339,7 @@ async function autoPullLatest(){
       createAll();
       suppressSnapshot = false;
       resetHistory();
+      saveLocal(); // keep this browser's backup in sync with what was just pulled
       renderSyncStatus('Loaded latest data for "'+meta.name+'" from the Sheet');
     }
     // data.ok===false just means this project hasn't synced yet — keep the current data as-is,
@@ -2304,6 +2347,16 @@ async function autoPullLatest(){
   } catch(err){
     // silent — the person can still use "Create project" / "Sync now" or the "Switch project" dropdown manually
   }
+}
+// Explicit, user-triggered pull for the CURRENTLY open project — separate from "Switch project"
+// (which is for loading a DIFFERENT project). Confirms first since it overwrites whatever is on
+// screen (and this browser's local backup) with the Sheet's copy.
+async function reloadFromSheet(){
+  if(!syncUrl){ renderSyncStatus('Paste the Web App URL first', true); return; }
+  if(!meta.name || !meta.name.trim()){ renderSyncStatus('Set a Project name first', true); return; }
+  if(!confirm('Reload "'+meta.name+'" from the Google Sheet? This replaces everything currently on screen (and this browser\'s local backup) with whatever is saved in the Sheet.')) return;
+  renderSyncStatus('Reloading from Sheet…');
+  await autoPullLatest();
 }
 
 function showTab(id){
@@ -2979,6 +3032,32 @@ if(typeof window.addEventListener === 'function'){
     gs.addEventListener('scroll', () => fixLabelOverlaps());
   }
 }
+// Restore from this device's local backup BEFORE the first render, so reloading the page (or
+// losing internet, or Google Sheet sync being down) never loses what was being worked on — this
+// takes priority over the baked-in sample data above. It intentionally does NOT auto-pull from
+// the Google Sheet on load anymore (that used to silently overwrite local edits with whatever was
+// last successfully synced, which could be older than what's on screen) — the Sheet is still kept
+// up to date via the normal auto-sync, and can be pulled back deliberately via "Switch project".
+(function restoreLocalOnLoad(){
+  const s = loadLocal();
+  if(!s || !s.meta) return;
+  meta = s.meta;
+  lookahead = s.lookahead || lookahead;
+  daily = s.daily || daily;
+  readiness_ = s.readiness_ || readiness_;
+  zoomPct = s.zoomPct || zoomPct;
+  criticalTasks = s.criticalTasks || criticalTasks;
+  feedingChains = s.feedingChains || feedingChains;
+  vendorPayments = s.vendorPayments || vendorPayments;
+  if(s.syncUrl) syncUrl = s.syncUrl;
+  if(s.autoSync !== undefined) autoSync = s.autoSync;
+  if(!meta.dayStart) meta.dayStart = '08:00';
+  if(meta.qaLink===undefined) meta.qaLink = '';
+  if(!meta.team) meta.team = emptyTeam();
+  // if this project name previously synced successfully in this browser, keep treating it as
+  // "already exists" so auto-sync resumes normally instead of demanding "Create project" again
+  projectExists = true;
+})();
 createAll();
 resetHistory();
 applyTheme();
