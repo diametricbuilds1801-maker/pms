@@ -3139,11 +3139,13 @@ if(typeof window.addEventListener === 'function'){
   }
 }
 // Restore from this device's local backup BEFORE the first render, so reloading the page (or
-// losing internet, or Google Sheet sync being down) never loses what was being worked on — this
-// takes priority over the baked-in sample data above. It intentionally does NOT auto-pull from
-// the Google Sheet on load anymore (that used to silently overwrite local edits with whatever was
-// last successfully synced, which could be older than what's on screen) — the Sheet is still kept
-// up to date via the normal auto-sync, and can be pulled back deliberately via "Switch project".
+// losing internet, or Google Sheet sync being down) never shows a blank page while the Sheet pull
+// below is still in flight — this takes priority over the baked-in sample data above, purely as an
+// instant placeholder. The Google Sheet is the authoritative copy: right after this local restore,
+// if this project already has a Sheet, we pull its current data and it OVERWRITES whatever was
+// shown locally — so what's on screen always ends up matching what's actually saved in the Sheet,
+// not a possibly-stale local cache. If there's no internet / the Sheet is unreachable, the local
+// copy shown here simply stays as the fallback.
 (function restoreLocalOnLoad(){
   const s = loadLocal();
   if(!s || !s.meta) return;
@@ -3170,6 +3172,14 @@ if(typeof window.addEventListener === 'function'){
 createAll();
 resetHistory();
 applyTheme();
+// The Sheet is authoritative: if this project already has a Sheet (projectExists, from local
+// restore above), pull its current data now and let it replace the local placeholder just shown —
+// so a fresh page load always ends up showing exactly what's saved in the Sheet, not a stale local
+// copy from before the last successful sync. Runs silently; if it fails (offline, Sheet down), the
+// local copy already on screen simply remains as-is.
+if(projectExists && syncUrl && meta.name && meta.name.trim()){
+  autoPullLatest();
+}
 // Safety-net resync: every 10 seconds, push the CURRENT full state to the Sheet (if auto-sync is
 // on and the project already exists) — independent of the per-edit debounce. This catches the
 // rare case where a value was still mid-edit right as a debounced sync fired and so didn't make
