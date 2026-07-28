@@ -462,6 +462,14 @@ let confirmedProjectName = '';
 // before a debounced auto-sync had a chance to land, the next load knows to PUSH this edit to the
 // Sheet first — rather than pulling the Sheet's (older) copy and silently overwriting the edit.
 let hasUnsyncedEdits = false;
+// True only when a project's Sheet exists but its data could not be confirmed read (see the
+// "blank template" fallback in onProjectPicked). While true, NOTHING may be synced for this
+// project — not the debounced auto-sync, not the safety-net interval, not even a manual "Create
+// project"/"Sync now" click, and not the flush-before-switch — until the person has deliberately
+// confirmed (via a successful reload) that it's safe. This is stricter than projectExists=false
+// alone, because that flag by itself still let the flush-before-switch push the ambiguous blank
+// state on the very next switch.
+let blockAutoSync = false;
 const BASE_PXW = 5;
 let historyStack = [];
 let historyPos = -1;
@@ -2373,6 +2381,7 @@ async function autoPullLatest(){
       if(!meta.team) meta.team = emptyTeam();
       projectExists = true; // a Sheet already exists for this project name
       confirmedProjectName = meta.name;
+      blockAutoSync = false;
       createAll();
       suppressSnapshot = false;
       resetHistory();
@@ -2706,6 +2715,7 @@ function resetAll(){
   projectExists = false; // sample data is local-only until "Create project" is clicked again
   confirmedProjectName = '';
   hasUnsyncedEdits = true;
+  blockAutoSync = false;
   createAll();
   suppressSnapshot = false;
   resetHistory();
@@ -2745,6 +2755,7 @@ function newProject(){
   projectExists = false; // new/untitled project — nothing gets created until "Create project" is clicked
   confirmedProjectName = '';
   hasUnsyncedEdits = true;
+  blockAutoSync = false;
   createAll();
   suppressSnapshot = false;
   resetHistory();
@@ -2868,6 +2879,7 @@ function renderSyncStatus(msg, isErr){
 // that only happens via an explicit "Create project" click.
 function scheduleAutoSync(){
   hasUnsyncedEdits = true;
+  if(blockAutoSync) return;
   if(!autoSync || !projectExists || !syncUrl || !meta.name || !meta.name.trim()) return;
   clearTimeout(syncTimer);
   syncTimer = setTimeout(() => syncToSheet(false), 800);
@@ -2911,6 +2923,10 @@ function submitViaHiddenForm_(payloadStr){
 }
 async function syncToSheet(manual, attempt){
   attempt = attempt || 1;
+  if(blockAutoSync){
+    renderSyncStatus('This project\'s real data could not be confirmed earlier — syncing is blocked to avoid overwriting it. Use "Switch project" to this name again, or "Reload from Sheet", to clear this.', true);
+    return false;
+  }
   if(!syncUrl){ if(manual) renderSyncStatus('Paste the Web App URL first', true); return false; }
   if(!meta.name || !meta.name.trim()){ if(manual) renderSyncStatus('Set a Project name first (Summary tab) — nothing is created until then', true); return false; }
   if(syncInFlight) return false;
@@ -2938,6 +2954,7 @@ async function syncToSheet(manual, attempt){
     projectExists = true;
     confirmedProjectName = meta.name;
     hasUnsyncedEdits = false;
+    blockAutoSync = false;
     lastSyncAt = new Date().toLocaleTimeString('en-IN', {hour:'2-digit', minute:'2-digit'});
     clearTimeout(fallbackRetryTimer);
     saveLocal(); // persist projectExists=true so a reload right after this doesn't ask to "Create project" again
@@ -2996,7 +3013,12 @@ async function onProjectPicked(name){
   // straight to loading — this avoids an unnecessary extra sync attempt on every switch, which
   // could itself hit a transient hiccup and needlessly block switching even though the data was
   // already safely saved moments ago.
-  if(hasUnsyncedEdits && syncUrl && meta.name && meta.name.trim()){
+  if(blockAutoSync){
+    if(!confirm('This project\'s data could not be confirmed earlier, so syncing has been blocked for it — any edits made since then exist ONLY here and were never saved anywhere. Switch away anyway and lose them?')){
+      const sel = document.getElementById('project-list'); if(sel) sel.value = meta.name || '';
+      return;
+    }
+  } else if(hasUnsyncedEdits && syncUrl && meta.name && meta.name.trim()){
     clearTimeout(syncTimer);
     clearTimeout(fallbackRetryTimer);
     if(statusEl){ statusEl.textContent = 'Saving "' + meta.name + '" before switching…'; statusEl.style.color = 'var(--text-secondary)'; }
@@ -3045,6 +3067,7 @@ async function onProjectPicked(name){
         projectExists = true;
         confirmedProjectName = meta.name;
         hasUnsyncedEdits = false;
+        blockAutoSync = false;
         createAll();
         suppressSnapshot = false;
         resetHistory();
@@ -3080,6 +3103,8 @@ async function onProjectPicked(name){
                               // from overwriting the Sheet until the person confirms manually.
       confirmedProjectName = '';
       hasUnsyncedEdits = false;
+      blockAutoSync = true; // stronger block — see declaration comment. Cleared only by a
+                             // subsequent successful load/reload/manual sync for this project.
       createAll();
       suppressSnapshot = false;
       resetHistory();
@@ -3103,6 +3128,7 @@ async function onProjectPicked(name){
     lastSheetUrl = '';
     projectExists = true; // switched to a project that already has a Sheet
     confirmedProjectName = meta.name;
+    blockAutoSync = false;
     createAll();
     suppressSnapshot = false;
     resetHistory();
