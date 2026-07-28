@@ -2959,11 +2959,22 @@ async function refreshProjectList(){
 async function onProjectPicked(name){
   if(!name) return;
   if(name === meta.name){ return; } // already on this project
-  if(!confirm(`Load "${name}" from the Sheet? Your current unsaved edits in this tool will be replaced.`)){
-    const sel = document.getElementById('project-list'); if(sel) sel.value = meta.name || '';
-    return;
-  }
   const statusEl = document.getElementById('project-list-status');
+  // Flush the OLD project first: if a debounced auto-sync (or the 1-min retry) is still queued for
+  // it, cancel the timer and push its current state RIGHT NOW, and wait for it to finish. This is
+  // what makes an instant, no-confirmation switch safe — the old project's latest edits land in
+  // its OWN Sheet before we ever touch `meta`/tasks for the new one, so nothing is lost and nothing
+  // bleeds into the project we're switching to.
+  if(autoSync && projectExists && syncUrl && meta.name && meta.name.trim()){
+    clearTimeout(syncTimer);
+    clearTimeout(fallbackRetryTimer);
+    if(statusEl){ statusEl.textContent = 'Saving "' + meta.name + '" before switching…'; statusEl.style.color = 'var(--text-secondary)'; }
+    // if a sync is already mid-flight (e.g. the safety-net tick just fired), wait for it to land
+    // before starting our own flush, instead of syncToSheet() silently no-op'ing on top of it.
+    let waited = 0;
+    while(syncInFlight && waited < 15000){ await new Promise(r => setTimeout(r, 200)); waited += 200; }
+    await syncToSheet(false);
+  }
   if(statusEl){ statusEl.textContent = 'Loading ' + name + '…'; statusEl.style.color = 'var(--text-secondary)'; }
   try {
     const url = syncUrl + (syncUrl.includes('?') ? '&' : '?') + 'action=load&project=' + encodeURIComponent(name);
