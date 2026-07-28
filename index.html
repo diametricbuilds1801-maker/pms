@@ -2960,12 +2960,19 @@ async function onProjectPicked(name){
   if(!name) return;
   if(name === meta.name){ return; } // already on this project
   const statusEl = document.getElementById('project-list-status');
-  // Flush the OLD project first: if a debounced auto-sync (or the 1-min retry) is still queued for
-  // it, cancel the timer and push its current state RIGHT NOW, and wait for it to finish. This is
-  // what makes an instant, no-confirmation switch safe — the old project's latest edits land in
-  // its OWN Sheet before we ever touch `meta`/tasks for the new one, so nothing is lost and nothing
-  // bleeds into the project we're switching to.
-  if(autoSync && projectExists && syncUrl && meta.name && meta.name.trim()){
+  // An unnamed project has nowhere to be saved (the Sheet is keyed by Project name) — warn before
+  // switching away discards it, instead of silently losing it.
+  if((!meta.name || !meta.name.trim()) && !confirm('The current project has no name set, so it cannot be saved anywhere before switching. Continue and discard its data?')){
+    const sel = document.getElementById('project-list'); if(sel) sel.value = meta.name || '';
+    return;
+  }
+  // Flush the OLD project first: whether it was already synced (projectExists=true) or this is a
+  // brand-new, never-yet-"Created" project that only has a name and some edits, save it to its own
+  // Sheet now — otherwise switching away silently discards it (local backup is a single shared
+  // slot, not per-project, so leaving without saving loses it from BOTH the browser and the Sheet).
+  // This only runs on an explicit switch-project action, never from typing alone, so it can't
+  // reintroduce the "typing a name silently spawns a Sheet" bug fixed earlier.
+  if(syncUrl && meta.name && meta.name.trim()){
     clearTimeout(syncTimer);
     clearTimeout(fallbackRetryTimer);
     if(statusEl){ statusEl.textContent = 'Saving "' + meta.name + '" before switching…'; statusEl.style.color = 'var(--text-secondary)'; }
