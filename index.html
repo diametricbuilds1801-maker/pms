@@ -2983,13 +2983,12 @@ async function onProjectPicked(name){
     const sel = document.getElementById('project-list'); if(sel) sel.value = meta.name || '';
     return;
   }
-  // Flush the OLD project first: whether it was already synced (projectExists=true) or this is a
-  // brand-new, never-yet-"Created" project that only has a name and some edits, save it to its own
-  // Sheet now — otherwise switching away silently discards it (local backup is a single shared
-  // slot, not per-project, so leaving without saving loses it from BOTH the browser and the Sheet).
-  // This only runs on an explicit switch-project action, never from typing alone, so it can't
-  // reintroduce the "typing a name silently spawns a Sheet" bug fixed earlier.
-  if(syncUrl && meta.name && meta.name.trim()){
+  // Flush the OLD project first — but ONLY if there's actually something unsynced. If everything
+  // is already confirmed-synced (hasUnsyncedEdits is false), there's nothing new to push, so skip
+  // straight to loading — this avoids an unnecessary extra sync attempt on every switch, which
+  // could itself hit a transient hiccup and needlessly block switching even though the data was
+  // already safely saved moments ago.
+  if(hasUnsyncedEdits && syncUrl && meta.name && meta.name.trim()){
     clearTimeout(syncTimer);
     clearTimeout(fallbackRetryTimer);
     if(statusEl){ statusEl.textContent = 'Saving "' + meta.name + '" before switching…'; statusEl.style.color = 'var(--text-secondary)'; }
