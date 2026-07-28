@@ -1333,8 +1333,16 @@ function update(){
   fixLabelOverlaps();
   scheduleSnapshot();
   renderSyncStatus();
-  scheduleAutoSync();
-  scheduleLocalSave();
+  // CRITICAL: only schedule an auto-sync / local-save for a REAL user edit, never as a side effect
+  // of rendering data that was just loaded/restored (onProjectPicked, page-load restore, importJSON,
+  // newProject, reset, etc. all set suppressSnapshot=true around their createAll() call for exactly
+  // this reason). Without this guard, simply LOADING a project's correct data from the Sheet would
+  // immediately queue a fresh push of it back — turning every switch into an unnecessary re-sync,
+  // and in edge cases, a way for a bad/partial load to silently overwrite good data in the Sheet.
+  if(!suppressSnapshot){
+    scheduleAutoSync();
+    scheduleLocalSave();
+  }
 }
 
 function taskStatus(t, winStart, winEnd, today){
@@ -3210,14 +3218,14 @@ if(typeof window.addEventListener === 'function'){
   confirmedProjectName = projectExists ? (meta.name || '') : '';
   hasUnsyncedEdits = !!s.hasUnsyncedEdits;
 })();
+// Initial render must not itself count as an "edit" — without suppressSnapshot here, simply
+// showing the locally-restored (or baked-in sample) data on first paint would immediately queue
+// an auto-sync of it, before the authoritative Sheet-pull below even gets a chance to run.
+suppressSnapshot = true;
 createAll();
+suppressSnapshot = false;
 resetHistory();
 applyTheme();
-// The Sheet is authoritative: if this project already has a Sheet (projectExists, from local
-// restore above), pull its current data now and let it replace the local placeholder just shown —
-// so a fresh page load always ends up showing exactly what's saved in the Sheet, not a stale local
-// copy from before the last successful sync. Runs silently; if it fails (offline, Sheet down), the
-// local copy already on screen simply remains as-is.
 // The Sheet is authoritative — BUT only once we're sure local doesn't hold an edit the Sheet has
 // never seen. If the last session ended before a debounced auto-sync could land (e.g. the page was
 // reloaded right after typing something), hasUnsyncedEdits is still true from local storage: in
