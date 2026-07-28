@@ -148,7 +148,7 @@
     <div>
       <p style="font-size:13px; font-weight:600; color:var(--gold); margin:0 0 8px;">Project details</p>
       <div style="display:grid; grid-template-columns:150px 1fr 150px 1fr; gap:8px 16px; align-items:center; font-size:13px; max-width:900px;">
-        <label>Project name</label><input type="text" id="m-name" oninput="meta.name=this.value; update();" style="height:28px;">
+        <label>Project name</label><input type="text" id="m-name" oninput="onProjectNameInput(this.value);" style="height:28px;">
         <label>Client</label><input type="text" id="m-client" oninput="meta.client=this.value; scheduleAutoSync();" style="height:28px;">
         <label>Location</label><input type="text" id="m-location" oninput="meta.location=this.value; scheduleAutoSync();" style="height:28px;">
         <label>Project start date</label><input type="date" id="m-start" onchange="meta.start=this.value; update();" style="height:28px;">
@@ -450,6 +450,13 @@ function clearLocalBackup(){
 // clicks "Create project" (or loads/switches to a project that already has a Sheet). This stops
 // a placeholder name typed while trying the tool out from silently spawning a real Google Sheet.
 let projectExists = false;
+// Tracks the project name that projectExists=true actually belongs to. If the person edits the
+// "Project name" field to something else while projectExists is still true (e.g. typing a new
+// name to start a different project, without ever clicking "Create project" for it), projectExists
+// must drop back to false — otherwise the very next auto-sync/safety-net tick silently creates a
+// brand-new Sheet under the new name, seeded with whatever tasks happen to still be in memory from
+// the OLD project. See onProjectNameInput() below.
+let confirmedProjectName = '';
 const BASE_PXW = 5;
 let historyStack = [];
 let historyPos = -1;
@@ -2301,6 +2308,18 @@ function createAll(){
   if(syncUrl && !projectListFetched){ projectListFetched = true; refreshProjectList(); }
   update();
 }
+// Called on every keystroke in the "Project name" field. If a Sheet already exists for the
+// CURRENT confirmed name and the person types something different, this is a rename/new-project
+// attempt — projectExists must drop back to false so nothing auto-syncs under the new name until
+// "Create project" is explicitly clicked again for it. Prevents the "typing a name silently spawns
+// a Sheet, seeded with the old project's tasks" bug.
+function onProjectNameInput(val){
+  meta.name = val;
+  if(projectExists && val.trim() !== confirmedProjectName.trim()){
+    projectExists = false;
+  }
+  update();
+}
 function onSyncUrlSet(){
   if(syncUrl && !projectListFetched){ projectListFetched = true; refreshProjectList(); }
 }
@@ -2340,6 +2359,7 @@ async function autoPullLatest(){
       if(meta.qaLink===undefined) meta.qaLink = '';
       if(!meta.team) meta.team = emptyTeam();
       projectExists = true; // a Sheet already exists for this project name
+      confirmedProjectName = meta.name;
       createAll();
       suppressSnapshot = false;
       resetHistory();
@@ -2671,6 +2691,7 @@ function resetAll(){
   criticalTasks = s.criticalTasks; feedingChains = s.feedingChains; vendorPayments = s.vendorPayments;
   syncUrl = s.syncUrl||''; autoSync = s.autoSync||false;
   projectExists = false; // sample data is local-only until "Create project" is clicked again
+  confirmedProjectName = '';
   createAll();
   suppressSnapshot = false;
   resetHistory();
@@ -2708,6 +2729,7 @@ function newProject(){
   feedingChains.forEach(fc => fc.tasks.forEach(resetProgress));
   lastSheetUrl = '';
   projectExists = false; // new/untitled project — nothing gets created until "Create project" is clicked
+  confirmedProjectName = '';
   createAll();
   suppressSnapshot = false;
   resetHistory();
@@ -2891,6 +2913,7 @@ async function syncToSheet(manual, attempt){
       if(data && data.ok && data.exists){ confirmed = true; if(data.url) lastSheetUrl = data.url; }
     } catch(confirmErr){ /* form submission likely still went through even if this confirmation didn't */ }
     projectExists = true;
+    confirmedProjectName = meta.name;
     lastSyncAt = new Date().toLocaleTimeString('en-IN', {hour:'2-digit', minute:'2-digit'});
     clearTimeout(fallbackRetryTimer);
     saveLocal(); // persist projectExists=true so a reload right after this doesn't ask to "Create project" again
@@ -2966,6 +2989,7 @@ async function onProjectPicked(name){
     // keep this tool's own syncUrl/autoSync — don't let a loaded project silently change them
     lastSheetUrl = '';
     projectExists = true; // switched to a project that already has a Sheet
+    confirmedProjectName = meta.name;
     createAll();
     suppressSnapshot = false;
     resetHistory();
@@ -3076,6 +3100,7 @@ if(typeof window.addEventListener === 'function'){
   // locally-saved project (even one just typed into and never explicitly created) is what caused
   // a Sheet to get silently created/synced on its own before the button was ever clicked.
   projectExists = !!s.projectExists;
+  confirmedProjectName = projectExists ? (meta.name || '') : '';
 })();
 createAll();
 resetHistory();
