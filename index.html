@@ -2979,11 +2979,44 @@ async function onProjectPicked(name){
   try {
     const url = syncUrl + (syncUrl.includes('?') ? '&' : '?') + 'action=load&project=' + encodeURIComponent(name);
     const data = await fetchJsonRetry_(url);
-    if(!data || !data.ok || !data.rawState){
-      const errMsg = 'Could not load "'+name+'": ' + (data&&data.error?data.error:'no data found') + '\n\nYou are STILL on "'+(meta.name||'(untitled)')+'" — nothing changed. If this keeps happening, redeploy the Apps Script as a new version (Deploy > Manage deployments > edit > New version > Deploy).';
+    if(!data || !data.ok){
+      const errMsg = 'Could not load "'+name+'": ' + (data&&data.error?data.error:'unknown error') + '\n\nYou are STILL on "'+(meta.name||'(untitled)')+'" — nothing changed. If this keeps happening, redeploy the Apps Script as a new version (Deploy > Manage deployments > edit > New version > Deploy).';
       if(statusEl){ statusEl.textContent = 'Load failed — see popup'; statusEl.style.color='var(--red)'; }
       const sel = document.getElementById('project-list'); if(sel) sel.value = meta.name || '';
       alert(errMsg);
+      return;
+    }
+    if(!data.rawState){
+      // A Sheet already exists for this project name (the backend found it and said ok:true), but
+      // nothing has ever been synced into its _data tab yet — e.g. it was created empty by an old
+      // bug, or by "Create project" being clicked before any tasks were added. Rather than blocking
+      // the switch with an error, open it as a fresh project under this name: the standard task
+      // template loads so there's something to work with, and the very next auto-sync/safety-net
+      // tick writes real data into this SAME already-existing Sheet — no new Sheet gets created.
+      suppressSnapshot = true;
+      const s = JSON.parse(origState);
+      meta = Object.assign({}, s.meta, {name: name, client:'', location:'', deliveryDate:'', start:new Date().toISOString().slice(0,10), team: emptyTeam()});
+      lookahead = {from: new Date().toISOString().slice(0,10), days: 3};
+      readiness_ = {days: 7};
+      daily = {date: (()=>{ const d=new Date(); d.setDate(d.getDate()+1); return d.toISOString().slice(0,10); })()};
+      zoomPct = 100;
+      criticalTasks = s.criticalTasks;
+      feedingChains = s.feedingChains;
+      vendorPayments = [];
+      function resetProgress(t){
+        t.pct = 0; t.act = ''; t.adate = ''; t.qcDone = false;
+        t.infoReady = false; t.materialReady = false; t.labourReady = false;
+        (t.subtasks||[]).forEach(resetProgress);
+      }
+      criticalTasks.forEach(resetProgress);
+      feedingChains.forEach(fc => fc.tasks.forEach(resetProgress));
+      lastSheetUrl = '';
+      projectExists = true; // the Sheet already exists — just empty so far
+      confirmedProjectName = name;
+      createAll();
+      suppressSnapshot = false;
+      resetHistory();
+      if(statusEl){ statusEl.textContent = 'Opened "' + name + '" — this Sheet exists but has no data yet, so a blank template loaded'; statusEl.style.color = 'var(--green)'; }
       return;
     }
     const s = JSON.parse(data.rawState);
