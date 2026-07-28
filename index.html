@@ -426,7 +426,7 @@ function scheduleLocalSave(){
 }
 function saveLocal(){
   try {
-    const snap = JSON.stringify({meta, lookahead, daily, readiness_, zoomPct, criticalTasks, feedingChains, vendorPayments, syncUrl, autoSync, projectExists});
+    const snap = JSON.stringify({meta, lookahead, daily, readiness_, zoomPct, criticalTasks, feedingChains, vendorPayments, syncUrl, autoSync, projectExists, hasUnsyncedEdits});
     localStorage.setItem(LOCAL_KEY, snap);
     localStorage.setItem(LOCAL_KEY + '_savedAt', new Date().toISOString());
     const el = document.getElementById('local-save-status');
@@ -457,6 +457,11 @@ let projectExists = false;
 // brand-new Sheet under the new name, seeded with whatever tasks happen to still be in memory from
 // the OLD project. See onProjectNameInput() below.
 let confirmedProjectName = '';
+// True whenever there's a local edit that has NOT yet been confirmed as synced to the Sheet.
+// Persisted across reloads (see saveLocal/restoreLocalOnLoad) so that if the page is reloaded
+// before a debounced auto-sync had a chance to land, the next load knows to PUSH this edit to the
+// Sheet first — rather than pulling the Sheet's (older) copy and silently overwriting the edit.
+let hasUnsyncedEdits = false;
 const BASE_PXW = 5;
 let historyStack = [];
 let historyPos = -1;
@@ -2692,6 +2697,7 @@ function resetAll(){
   syncUrl = s.syncUrl||''; autoSync = s.autoSync||false;
   projectExists = false; // sample data is local-only until "Create project" is clicked again
   confirmedProjectName = '';
+  hasUnsyncedEdits = true;
   createAll();
   suppressSnapshot = false;
   resetHistory();
@@ -2730,6 +2736,7 @@ function newProject(){
   lastSheetUrl = '';
   projectExists = false; // new/untitled project — nothing gets created until "Create project" is clicked
   confirmedProjectName = '';
+  hasUnsyncedEdits = true;
   createAll();
   suppressSnapshot = false;
   resetHistory();
@@ -2852,6 +2859,7 @@ function renderSyncStatus(msg, isErr){
 // projectExists so editing a not-yet-created project never silently spawns a Sheet on its own —
 // that only happens via an explicit "Create project" click.
 function scheduleAutoSync(){
+  hasUnsyncedEdits = true;
   if(!autoSync || !projectExists || !syncUrl || !meta.name || !meta.name.trim()) return;
   clearTimeout(syncTimer);
   syncTimer = setTimeout(() => syncToSheet(false), 800);
@@ -2921,6 +2929,7 @@ async function syncToSheet(manual, attempt){
     }
     projectExists = true;
     confirmedProjectName = meta.name;
+    hasUnsyncedEdits = false;
     lastSyncAt = new Date().toLocaleTimeString('en-IN', {hour:'2-digit', minute:'2-digit'});
     clearTimeout(fallbackRetryTimer);
     saveLocal(); // persist projectExists=true so a reload right after this doesn't ask to "Create project" again
@@ -3168,6 +3177,7 @@ if(typeof window.addEventListener === 'function'){
   // a Sheet to get silently created/synced on its own before the button was ever clicked.
   projectExists = !!s.projectExists;
   confirmedProjectName = projectExists ? (meta.name || '') : '';
+  hasUnsyncedEdits = !!s.hasUnsyncedEdits;
 })();
 createAll();
 resetHistory();
@@ -3177,8 +3187,18 @@ applyTheme();
 // so a fresh page load always ends up showing exactly what's saved in the Sheet, not a stale local
 // copy from before the last successful sync. Runs silently; if it fails (offline, Sheet down), the
 // local copy already on screen simply remains as-is.
+// The Sheet is authoritative — BUT only once we're sure local doesn't hold an edit the Sheet has
+// never seen. If the last session ended before a debounced auto-sync could land (e.g. the page was
+// reloaded right after typing something), hasUnsyncedEdits is still true from local storage: in
+// that case, PUSH the local copy to the Sheet first so that edit is never lost, instead of pulling
+// the Sheet's (older, pre-edit) copy over it. Only when local is already known to match the last
+// confirmed sync do we pull — which is what lets edits made from another device/tab show up here.
 if(projectExists && syncUrl && meta.name && meta.name.trim()){
-  autoPullLatest();
+  if(hasUnsyncedEdits){
+    syncToSheet(false);
+  } else {
+    autoPullLatest();
+  }
 }
 // Safety-net resync: every 10 seconds, push the CURRENT full state to the Sheet (if auto-sync is
 // on and the project already exists) — independent of the per-edit debounce. This catches the
