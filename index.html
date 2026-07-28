@@ -2356,7 +2356,7 @@ async function fetchJsonRetry_(url, tries){
   let lastErr;
   for(let i = 0; i < tries; i++){
     try {
-      const res = await fetch(url);
+      const res = await fetch(url, {cache: 'no-store'});
       return await res.json();
     } catch(err){
       lastErr = err;
@@ -2368,7 +2368,7 @@ async function fetchJsonRetry_(url, tries){
 async function autoPullLatest(){
   if(!syncUrl || !meta.name) return;
   try {
-    const url = syncUrl + (syncUrl.includes('?') ? '&' : '?') + 'action=load&project=' + encodeURIComponent(meta.name);
+    const url = syncUrl + (syncUrl.includes('?') ? '&' : '?') + 'action=load&project=' + encodeURIComponent(meta.name) + '&_ts=' + Date.now();
     const data = await fetchJsonRetry_(url);
     if(data && data.ok && data.rawState){
       const s = JSON.parse(data.rawState);
@@ -2943,8 +2943,8 @@ async function syncToSheet(manual, attempt){
     // "probably fine".
     let confirmed = false;
     try {
-      const statusUrl = syncUrl + (syncUrl.includes('?') ? '&' : '?') + 'action=status&project=' + encodeURIComponent(meta.name);
-      const res = await fetch(statusUrl);
+      const statusUrl = syncUrl + (syncUrl.includes('?') ? '&' : '?') + 'action=status&project=' + encodeURIComponent(meta.name) + '&_ts=' + Date.now();
+      const res = await fetch(statusUrl, {cache: 'no-store'});
       const data = await res.json();
       if(data && data.ok && data.exists){ confirmed = true; if(data.url) lastSheetUrl = data.url; }
     } catch(confirmErr){ /* network hiccup on the confirmation GET itself — retried below like any other failure */ }
@@ -2985,7 +2985,7 @@ async function refreshProjectList(){
   if(!syncUrl){ if(statusEl) statusEl.textContent = 'Paste the Web App URL first'; return; }
   if(statusEl) statusEl.textContent = 'Loading…';
   try {
-    const url = syncUrl + (syncUrl.includes('?') ? '&' : '?') + 'action=list';
+    const url = syncUrl + (syncUrl.includes('?') ? '&' : '?') + 'action=list' + '&_ts=' + Date.now();
     const data = await fetchJsonRetry_(url);
     if(!data || !data.ok){ if(statusEl){ statusEl.textContent = 'Could not load list: ' + (data&&data.error?data.error:'unknown error'); statusEl.style.color='var(--red)'; } return; }
     if(sel){
@@ -3036,7 +3036,7 @@ async function onProjectPicked(name){
   }
   if(statusEl){ statusEl.textContent = 'Loading ' + name + '…'; statusEl.style.color = 'var(--text-secondary)'; }
   try {
-    const url = syncUrl + (syncUrl.includes('?') ? '&' : '?') + 'action=load&project=' + encodeURIComponent(name);
+    const url = syncUrl + (syncUrl.includes('?') ? '&' : '?') + 'action=load&project=' + encodeURIComponent(name) + '&_ts=' + Date.now();
     const data = await fetchJsonRetry_(url);
     if(!data || !data.ok){
       const errMsg = 'Could not load "'+name+'": ' + (data&&data.error?data.error:'unknown error') + '\n\nYou are STILL on "'+(meta.name||'(untitled)')+'" — nothing changed. If this keeps happening, redeploy the Apps Script as a new version (Deploy > Manage deployments > edit > New version > Deploy).';
@@ -3050,7 +3050,10 @@ async function onProjectPicked(name){
       // with real data), OR a transient read glitch on a Sheet that actually HAS real data. Retry
       // the load once before assuming "empty" — this alone fixes most false-empty cases.
       let retryData = null;
-      try { retryData = await fetchJsonRetry_(url); } catch(retryErr){ /* fall through to blank-template handling below */ }
+      // a fresh timestamp here (not the same `url`) matters — reusing the exact same URL string
+      // for the retry risks hitting a cached response for that exact request again.
+      const retryUrl = syncUrl + (syncUrl.includes('?') ? '&' : '?') + 'action=load&project=' + encodeURIComponent(name) + '&_ts=' + Date.now();
+      try { retryData = await fetchJsonRetry_(retryUrl); } catch(retryErr){ /* fall through to blank-template handling below */ }
       if(retryData && retryData.ok && retryData.rawState){
         const s2 = JSON.parse(retryData.rawState);
         suppressSnapshot = true;
