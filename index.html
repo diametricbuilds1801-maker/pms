@@ -3016,12 +3016,40 @@ async function onProjectPicked(name){
       return;
     }
     if(!data.rawState){
-      // A Sheet already exists for this project name (the backend found it and said ok:true), but
-      // nothing has ever been synced into its _data tab yet — e.g. it was created empty by an old
-      // bug, or by "Create project" being clicked before any tasks were added. Rather than blocking
-      // the switch with an error, open it as a fresh project under this name: the standard task
-      // template loads so there's something to work with, and the very next auto-sync/safety-net
-      // tick writes real data into this SAME already-existing Sheet — no new Sheet gets created.
+      // ok:true but no rawState is ambiguous: it could genuinely be an empty Sheet (never synced
+      // with real data), OR a transient read glitch on a Sheet that actually HAS real data. Retry
+      // the load once before assuming "empty" — this alone fixes most false-empty cases.
+      let retryData = null;
+      try { retryData = await fetchJsonRetry_(url); } catch(retryErr){ /* fall through to blank-template handling below */ }
+      if(retryData && retryData.ok && retryData.rawState){
+        const s2 = JSON.parse(retryData.rawState);
+        suppressSnapshot = true;
+        meta = s2.meta; criticalTasks = s2.criticalTasks; feedingChains = s2.feedingChains;
+        lookahead = s2.lookahead || {from: new Date().toISOString().slice(0,10), days: 3};
+        daily = s2.daily || {date: new Date().toISOString().slice(0,10)};
+        readiness_ = s2.readiness_ || {days: 7};
+        zoomPct = s2.zoomPct || 100;
+        vendorPayments = s2.vendorPayments || [];
+        if(!meta.dayStart) meta.dayStart = '08:00';
+        if(meta.qaLink===undefined) meta.qaLink = '';
+        if(!meta.team) meta.team = emptyTeam();
+        lastSheetUrl = '';
+        projectExists = true;
+        confirmedProjectName = meta.name;
+        hasUnsyncedEdits = false;
+        createAll();
+        suppressSnapshot = false;
+        resetHistory();
+        if(statusEl){ statusEl.textContent = 'Loaded ' + name; statusEl.style.color = 'var(--green)'; }
+        return;
+      }
+      // Still empty after a retry — a Sheet exists for this project name, but its _data tab is
+      // genuinely empty (or unreadable). CRITICAL: do NOT mark projectExists=true here. Doing so
+      // used to let the very next auto-sync silently push this blank template over whatever is
+      // ACTUALLY in the Sheet — permanently destroying real data on nothing more than a bad read.
+      // Instead, load the blank template purely for viewing/editing, but leave auto-sync OFF
+      // (projectExists stays false) so nothing gets written back until the person deliberately
+      // checks the Sheet and clicks "Create project" themselves.
       suppressSnapshot = true;
       const s = JSON.parse(origState);
       meta = Object.assign({}, s.meta, {name: name, client:'', location:'', deliveryDate:'', start:new Date().toISOString().slice(0,10), team: emptyTeam()});
@@ -3040,12 +3068,16 @@ async function onProjectPicked(name){
       criticalTasks.forEach(resetProgress);
       feedingChains.forEach(fc => fc.tasks.forEach(resetProgress));
       lastSheetUrl = '';
-      projectExists = true; // the Sheet already exists — just empty so far
-      confirmedProjectName = name;
+      projectExists = false; // DELIBERATELY false — see comment above. Prevents any auto-sync
+                              // from overwriting the Sheet until the person confirms manually.
+      confirmedProjectName = '';
+      hasUnsyncedEdits = false;
       createAll();
       suppressSnapshot = false;
       resetHistory();
-      if(statusEl){ statusEl.textContent = 'Opened "' + name + '" — this Sheet exists but has no data yet, so a blank template loaded'; statusEl.style.color = 'var(--green)'; }
+      const sel = document.getElementById('project-list'); if(sel) sel.value = meta.name || '';
+      alert('Warning: "'+name+'" has a Sheet, but its saved data could not be read (checked twice) — a blank template loaded instead so nothing is overwritten. Before doing anything else, click "Open Sheet" (once it appears) or check your Drive folder directly to see if this project actually has real data. If it does, do NOT click "Create project" — that would erase it. Try "Switch project" to this name again in a bit, or use "Reload from Sheet".');
+      if(statusEl){ statusEl.textContent = 'Opened "' + name + '" with a blank template — could not confirm its real data, see warning'; statusEl.style.color='var(--red)'; }
       return;
     }
     const s = JSON.parse(data.rawState);
