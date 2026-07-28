@@ -2895,35 +2895,44 @@ function submitViaHiddenForm_(payloadStr){
 }
 async function syncToSheet(manual, attempt){
   attempt = attempt || 1;
-  if(!syncUrl){ if(manual) renderSyncStatus('Paste the Web App URL first', true); return; }
-  if(!meta.name || !meta.name.trim()){ if(manual) renderSyncStatus('Set a Project name first (Summary tab) — nothing is created until then', true); return; }
-  if(syncInFlight) return;
+  if(!syncUrl){ if(manual) renderSyncStatus('Paste the Web App URL first', true); return false; }
+  if(!meta.name || !meta.name.trim()){ if(manual) renderSyncStatus('Set a Project name first (Summary tab) — nothing is created until then', true); return false; }
+  if(syncInFlight) return false;
   syncInFlight = true;
   if(manual) renderSyncStatus(projectExists ? 'Syncing…' : 'Creating…');
   else if(attempt > 1) renderSyncStatus('Syncing… (retry ' + attempt + '/3)');
   const payload = JSON.stringify(buildSyncPayload());
   try {
     await submitViaHiddenForm_(payload);
-    // Best-effort confirmation — a lightweight GET that just checks the Sheet exists and grabs its URL.
+    // Best-effort confirmation — a lightweight GET that just checks the Sheet exists and grabs its
+    // URL. NOTE: submitViaHiddenForm_() above can never itself signal failure (a <form> submission
+    // has no reject path), so THIS confirmation check is the only real signal of whether the write
+    // actually landed — treat a failed/negative confirmation as a real failure (see below), not as
+    // "probably fine".
     let confirmed = false;
     try {
       const statusUrl = syncUrl + (syncUrl.includes('?') ? '&' : '?') + 'action=status&project=' + encodeURIComponent(meta.name);
       const res = await fetch(statusUrl);
       const data = await res.json();
       if(data && data.ok && data.exists){ confirmed = true; if(data.url) lastSheetUrl = data.url; }
-    } catch(confirmErr){ /* form submission likely still went through even if this confirmation didn't */ }
+    } catch(confirmErr){ /* network hiccup on the confirmation GET itself — retried below like any other failure */ }
+    if(!confirmed){
+      throw new Error('Could not confirm the write reached the Sheet');
+    }
     projectExists = true;
     confirmedProjectName = meta.name;
     lastSyncAt = new Date().toLocaleTimeString('en-IN', {hour:'2-digit', minute:'2-digit'});
     clearTimeout(fallbackRetryTimer);
     saveLocal(); // persist projectExists=true so a reload right after this doesn't ask to "Create project" again
-    renderSyncStatus(confirmed ? ('Synced ' + lastSyncAt) : ('Sent ' + lastSyncAt + ' — could not confirm, check the Sheet'));
+    renderSyncStatus('Synced ' + lastSyncAt);
+    syncInFlight = false;
+    return true;
   } catch(err){
     syncInFlight = false;
     if(attempt < 3){
       renderSyncStatus('Sync hiccup, retrying… (' + attempt + '/3)', true);
-      setTimeout(() => syncToSheet(manual, attempt + 1), 1200 * attempt);
-      return;
+      await new Promise(r => setTimeout(r, 1200 * attempt));
+      return syncToSheet(manual, attempt + 1);
     }
     renderSyncStatus('Sync failed after 3 tries: ' + err.message + ' — retrying again in 1 min (or click Sync now)', true);
     // 3 quick retries all failed — instead of giving up, try once more in a minute. By the time
@@ -2932,8 +2941,7 @@ async function syncToSheet(manual, attempt){
     // values rather than stale/old data.
     clearTimeout(fallbackRetryTimer);
     fallbackRetryTimer = setTimeout(() => syncToSheet(false), 60000);
-  } finally {
-    syncInFlight = false;
+    return false;
   }
 }
 let projectListFetched = false;
@@ -2980,7 +2988,13 @@ async function onProjectPicked(name){
     // before starting our own flush, instead of syncToSheet() silently no-op'ing on top of it.
     let waited = 0;
     while(syncInFlight && waited < 15000){ await new Promise(r => setTimeout(r, 200)); waited += 200; }
-    await syncToSheet(false);
+    const flushOk = await syncToSheet(false);
+    if(!flushOk){
+      const sel = document.getElementById('project-list'); if(sel) sel.value = meta.name || '';
+      alert('Could not save "'+meta.name+'" before switching (connection/sync issue) — staying on this project so nothing is lost. Check your internet connection and try "Sync now" manually, then switch again once it shows "Synced".');
+      if(statusEl){ statusEl.textContent = 'Switch cancelled — could not save current project first'; statusEl.style.color = 'var(--red)'; }
+      return;
+    }
   }
   if(statusEl){ statusEl.textContent = 'Loading ' + name + '…'; statusEl.style.color = 'var(--text-secondary)'; }
   try {
