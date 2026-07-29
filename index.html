@@ -70,6 +70,8 @@
   .gtrack { position: relative; border-radius: 4px; background: var(--surface-1); flex-shrink: 0; margin: 0 6px; }
   .resize-handle { position: absolute; top: 0; bottom: 0; right: 0; width: 7px; cursor: ew-resize; border-radius: 0 4px 4px 0; touch-action: none; }
   .resize-handle:hover, .resize-handle:active { background: rgba(0,0,0,0.22); }
+  .drag-bar { cursor: grab; touch-action: none; }
+  .drag-bar:active { cursor: grabbing; }
   .stat-card { background: var(--surface-1); border-radius: var(--radius); padding: 10px 12px; }
   .chev { width: 14px; text-align: center; font-size: 10px; color: var(--text-muted); cursor: pointer; flex-shrink: 0; user-select: none; }
   .phase-badge { font-size: 8.5px; font-weight: 700; color: var(--gold); background: rgba(176,141,62,0.16); padding: 1px 4px; border-radius: 4px; white-space: nowrap; flex-shrink: 0; }
@@ -501,7 +503,7 @@ let dragSrcIndex = null;
 // spanning both critical-chain and feeding-chain tasks); its actual start is the LATEST of every
 // listed constraint. Left blank (or a bare relation with no number, e.g. just "SS") it defaults to
 // the task directly above this one in its own list. See parsePreds()/schedule().
-function newTask(name,duration,plan){ return {name, duration, plan, act:'', adate:'', owner:'', notes:'', shift:'', preds:'', pct:0, infoReady:false, materialReady:false, labourReady:false, link:'', infoLink:'', materialLink:'', labourLink:'', qcLink:'', qcDone:false, vendor:'', taskType:'critical', buffer:0, subtasks:[], expanded:false}; }
+function newTask(name,duration,plan){ return {name, duration, plan, act:'', adate:'', owner:'', notes:'', shift:'', preds:'', pct:0, infoReady:false, materialReady:false, labourReady:false, link:'', infoLink:'', materialLink:'', labourLink:'', qcLink:'', qcDone:false, vendor:'', taskType:'critical', buffer:0, manualStart:null, subtasks:[], expanded:false}; }
 // ---------------------------------------------------------------------------------------------
 // PROJECT DATA — Residential build, 300 sq yd plot, stilt + 4 floors + mumty + lift,
 // 2,400 sq ft covered per floor. Structure + full turnkey interiors. CCPM, conservative 30% buffers.
@@ -512,7 +514,7 @@ function mkSub(a){ var t = newTask(a[0], a[1], a[2]); t.owner = a[3]; t.vendor =
 let criticalTasks = (function(){
   const arr = [];
   function phase(name, owner, subs){
-    const t = newTask(name, 0, 0); t.owner = owner; t.expanded = false;
+    const t = newTask(name, 0, 0); t.owner = owner; t.expanded = true;
     t.subtasks = subs.map(mkSub); arr.push(t); return t;
   }
   phase("01 · Architecture & design freeze", "Architect", [
@@ -628,7 +630,7 @@ let feedingChains = (function(){
   function chain(name, preds, buffer, owner, subs){
     const top = newTask(name, 0, 0);
     top.owner = owner; top.taskType = 'feeding'; top.preds = preds; top.buffer = buffer;
-    top.expanded = false; top.subtasks = subs.map(mkSub);
+    top.expanded = true; top.subtasks = subs.map(mkSub);
     const m = parseInt(preds,10); fc.push({mergeIndex: (isNaN(m)?0:m-1), tasks:[top]});
   }
   chain("F1 · Statutory approvals & sanctions", "1SS", 10, "Process coordinator", [
@@ -901,6 +903,21 @@ function relStart(rel, prev, t){
   if(rel==='SF') return prev.start - t.duration;
   return prev.end; // FS (default)
 }
+// ---- Sub-task cross-links (Predecessor Successor tab feature) ----
+// A SEPARATE parser from parsePreds() above — kept entirely independent so the existing top-level
+// preds machinery (reordering, capturePredObjects/restorePredObjects, dependencyConnections) is
+// never touched. This one allows a sub-task to reference either a top-level task ("2FS") or
+// another sub-task anywhere in the project via its dotted # ("1.3FS", matching the # column), so
+// e.g. sub-task 2.5 can depend on sub-task 1.1 finishing, across phases.
+function parseSubPreds(raw){
+  const str = String(raw||'').trim();
+  if(!str) return [];
+  return str.split(',').map(s=>s.trim()).filter(Boolean).map(p => {
+    const m = p.match(/^(\d+(?:\.\d+)?)?\s*(FS|SS|FF|SF)$/i);
+    if(!m) return null;
+    return {ref: m[1] || null, rel: m[2].toUpperCase()};
+  }).filter(Boolean);
+}
 function schedule(){
   const all = allTopLevelTasks();
   const n = all.length;
@@ -911,6 +928,96 @@ function schedule(){
   });
   const computed = new Array(n).fill(false);
   const visiting = new Array(n).fill(false);
+  // subtask-level memoization, keyed "topIdx-si" — separate from the top-level computed/visiting
+  // arrays above since sub-tasks are addressed by a (topIdx, si) pair, not a single flat index.
+  const subComputed = new Map();
+  const subVisiting = new Map();
+  // guards a phase's subtask-rollup pass against being re-entered while it's already running —
+  // this can happen when a sub-task's DEFAULT (blank preds) resolution needs its own phase's
+  // anchor, and that phase was itself first reached via an unrelated cross-link from elsewhere
+  // (e.g. an earlier phase's sub-task explicitly referencing a later phase's sub-task, whose own
+  // default chain walks back through every earlier sibling). Without this guard, the re-entrant
+  // pass would try to roll up sub-tasks that are still mid-resolution further up the call stack
+  // and compute garbage/NaN from their not-yet-set start/end. With it, the re-entrant call is a
+  // no-op — the ORIGINAL (outer, still-running) pass is guaranteed to finish and roll up correctly.
+  const subtasksRollingUp = new Array(n).fill(false);
+  // resolves a preds reference string ("2" or "1.3") to the actual task object, ensuring it has
+  // been scheduled first (recursing into computeOne/computeSubOne as needed). Returns null for an
+  // out-of-range or malformed reference — that constraint is then silently skipped, same as an
+  // unresolvable top-level reference already is elsewhere in this file.
+  function resolveSubRef(ref){
+    if(ref===null || ref===undefined) return null;
+    const str = String(ref);
+    if(str.indexOf('.')>=0){
+      const parts = str.split('.');
+      const topIdx = parseInt(parts[0],10)-1;
+      const si = parseInt(parts[1],10)-1;
+      if(isNaN(topIdx) || isNaN(si) || topIdx<0 || topIdx>=n) return null;
+      const parent = all[topIdx];
+      if(!hasSub(parent) || si<0 || si>=parent.subtasks.length) return null;
+      computeOne(topIdx); // ensures the whole referenced phase (anchor + full sub-task rollup) is ready
+      return parent.subtasks[si];
+    }
+    const topIdx = parseInt(str,10)-1;
+    if(isNaN(topIdx) || topIdx<0 || topIdx>=n) return null;
+    computeOne(topIdx);
+    return all[topIdx];
+  }
+  // resolves ONE sub-task's start/end — default (blank preds) is the previous sibling sub-task
+  // (or, for the first sub-task in a phase, the phase's own anchor point, exactly matching the
+  // old purely-sequential behaviour); an explicit preds string overrides this with one or more
+  // references (top-level or dotted sub-task #), same FS/SS/FF/SF relations as top-level preds.
+  function computeSubOne(topIdx, si){
+    const key = topIdx+'-'+si;
+    if(subComputed.get(key)) return;
+    const parent = all[topIdx];
+    const st = parent.subtasks[si];
+    if(subVisiting.get(key)){
+      // circular reference — break the loop safely, same fallback as the top-level cycle guard
+      st.start = 0; st.end = st.duration;
+      subComputed.set(key, true); subVisiting.set(key, false);
+      return;
+    }
+    subVisiting.set(key, true);
+    const isFeed = topIdx>=nCrit;
+    if(st.buffer===undefined) st.buffer = 0;
+    st.duration = Number(st.duration)||0;
+    if(st.manualStart!=null){
+      // dragged by the person on the Gantt chart — use that exact day, skipping predecessor
+      // resolution and buffer entirely. Downstream tasks that reference this one still see its
+      // resulting start/end normally, same as any other resolved task.
+      st.start = Math.max(0, Number(st.manualStart)||0);
+      st.end = st.start + st.duration;
+      subComputed.set(key, true); subVisiting.set(key, false);
+      return;
+    }
+    const buf = safetyBuf(st, isFeed);
+    const parsed = parseSubPreds(st.preds);
+    let starts = [];
+    if(parsed.length){
+      parsed.forEach(p => {
+        if(!p.ref) return;
+        const prevTask = resolveSubRef(p.ref);
+        if(prevTask) starts.push(relStart(p.rel, prevTask, st));
+      });
+    }
+    if(!starts.length){
+      // default: previous sibling sub-task (FS), or — for the very first sub-task — this phase's
+      // own anchor point (t.start, already set by the time we get here — see computeOne below,
+      // which resolves its own anchor before ever touching sub-tasks).
+      if(si>0){
+        computeSubOne(topIdx, si-1);
+        starts.push(relStart('FS', parent.subtasks[si-1], st));
+      } else {
+        computeOne(topIdx); // no-op if already resolved/in-progress; guarantees parent.start exists
+        starts.push(parent.start);
+      }
+    }
+    let s = starts.length ? Math.max(...starts) : 0;
+    s = Math.max(0, s) + buf;
+    st.start = s; st.end = s + st.duration;
+    subComputed.set(key, true); subVisiting.set(key, false);
+  }
   function computeOne(idx){
     if(computed[idx]) return;
     const t = all[idx];
@@ -922,6 +1029,16 @@ function schedule(){
     }
     visiting[idx] = true;
     const isFeed = idx>=nCrit;
+    if(!hasSub(t) && t.manualStart!=null){
+      // dragged by the person on the Gantt chart — use that exact day directly, skipping
+      // predecessor/buffer resolution (only meaningful for a leaf/bare task; a phase's start is
+      // always a rollup of its sub-tasks, so this is intentionally ignored for phases).
+      t.start = Math.max(0, Number(t.manualStart)||0);
+      t.end = t.start + t.duration;
+      visiting[idx] = false;
+      computed[idx] = true;
+      return;
+    }
     const buf = safetyBuf(t, isFeed); // only feeding tasks carry an individual buffer; it sits just before the task, after all its predecessor constraints are resolved
     const parsed = parsePreds(t.preds);
     let starts = [];
@@ -943,9 +1060,27 @@ function schedule(){
     let s = starts.length ? Math.max(...starts) : 0;
     s = Math.max(0, s) + buf;
     t.start = s; t.end = s + t.duration;
-    scheduleSubtasks(t, isFeed);
-    if(hasSub(t)){ t.plan = rollupPlan(t); t.act = rollupAct(t); t.adate = rollupAdate(t); t.pct = rollupPct(t); }
-    computed[idx] = true; visiting[idx] = false;
+    // anchor is done — release the anchor-guard now, before touching sub-tasks, so a sub-task's
+    // default (blank preds) resolution that needs THIS SAME phase's anchor (the normal, same-
+    // phase call path) can safely re-enter computeOne(idx) without it looking like a cycle.
+    visiting[idx] = false;
+    if(hasSub(t)){
+      if(!subtasksRollingUp[idx]){
+        subtasksRollingUp[idx] = true;
+        t.subtasks.forEach((st,si) => computeSubOne(idx, si));
+        const starts2 = t.subtasks.map(st=>st.start);
+        const ends2 = t.subtasks.map(st=>st.end);
+        t.start = Math.min(...starts2);
+        t.end = Math.max(...ends2);
+        t.duration = t.end - t.start;
+        t.plan = rollupPlan(t); t.act = rollupAct(t); t.adate = rollupAdate(t); t.pct = rollupPct(t);
+        subtasksRollingUp[idx] = false;
+      }
+      // else: re-entrant call while this phase's rollup is already running further up the call
+      // stack (see the guard's declaration comment above) — skip; that original call will finish
+      // and roll up correctly once it unwinds.
+    }
+    computed[idx] = true;
   }
   for(let idx=0; idx<n; idx++) computeOne(idx);
   const chainSum = Math.max(0, ...criticalTasks.map(t=>t.end));
@@ -1081,6 +1216,18 @@ function dependencyConnections(){
   const nCrit = criticalTasks.length;
   const conns = [];
   function idOf(idx){ return idx<nCrit ? 'bar-crit-'+idx : 'bar-feed-'+(idx-nCrit); }
+  function subIdOf(idx,si){ return idx<nCrit ? `bar-crit-${idx}-s-${si}` : `bar-feed-${idx-nCrit}-s-${si}`; }
+  // resolves a preds ref string ("2" or "1.3") to its bar element id — used for the sub-task
+  // cross-link arrows below. Independent of resolveSubRef() inside schedule() (that one returns
+  // task objects for scheduling; this one only needs a DOM id for drawing).
+  function refToId(ref){
+    const str = String(ref);
+    if(str.indexOf('.')>=0){
+      const parts = str.split('.');
+      return subIdOf(parseInt(parts[0],10)-1, parseInt(parts[1],10)-1);
+    }
+    return idOf(parseInt(str,10)-1);
+  }
   all.forEach((t, idx) => {
     const isFeed = idx>=nCrit;
     const tgtId = idOf(idx);
@@ -1089,14 +1236,24 @@ function dependencyConnections(){
       const rel = parsed.length ? parsed[0].rel : 'FS';
       const aboveIdx = aboveGlobalIndex(idx, isFeed, nCrit);
       if(aboveIdx!==null) conns.push({srcId:idOf(aboveIdx), tgtId, rel});
-      return;
+    } else {
+      parsed.forEach(p => {
+        if(!p.num) return;
+        const pIdx = p.num-1;
+        if(pIdx<0 || pIdx>=all.length || pIdx===idx) return;
+        conns.push({srcId:idOf(pIdx), tgtId, rel:p.rel});
+      });
     }
-    parsed.forEach(p => {
-      if(!p.num) return;
-      const pIdx = p.num-1;
-      if(pIdx<0 || pIdx>=all.length || pIdx===idx) return;
-      conns.push({srcId:idOf(pIdx), tgtId, rel:p.rel});
-    });
+    // explicit sub-task cross-links (blank/default sub-task preds stay unlinked visually, same
+    // as before — an arrow only appears once the person deliberately sets one).
+    if(hasSub(t)){
+      t.subtasks.forEach((st,si) => {
+        const subParsed = parseSubPreds(st.preds);
+        if(!subParsed.length) return;
+        const subTgtId = subIdOf(idx, si);
+        subParsed.forEach(p => { if(p.ref) conns.push({srcId:refToId(p.ref), tgtId:subTgtId, rel:p.rel}); });
+      });
+    }
   });
   return conns;
 }
@@ -1836,12 +1993,19 @@ function patchMilestones(total){
     setT('mdate-'+mi, day!==null ? fmtD(dateAt(day)) : '—');
     const markerEl = document.getElementById('ms-marker-'+mi);
     const lblEl = document.getElementById('ms-lbl-'+mi);
+    const hlEl = document.getElementById('ms-highlight-'+mi);
     if(markerEl){
       if(day!==null){
         markerEl.style.display = 'block';
         markerEl.style.left = (total>0 ? (day/total*100) : 0).toFixed(2)+'%';
         markerEl.title = (m.name||'Milestone') + ' — ' + fmtD(dateAt(day));
       } else { markerEl.style.display = 'none'; }
+    }
+    if(hlEl){
+      if(day!==null){
+        hlEl.style.display = 'block';
+        hlEl.style.left = (total>0 ? (day/total*100) : 0).toFixed(2)+'%';
+      } else { hlEl.style.display = 'none'; }
     }
     if(lblEl){
       lblEl.innerHTML = day!==null ? `<b>◆ ${escHtml(m.name||'Milestone')}</b>` : '';
@@ -1854,13 +2018,14 @@ function removeMilestone(mi){ milestones.splice(mi,1); renderMilestoneRows(); cr
 // one Gantt row per milestone — a diamond marker at a single point in time (no bar/duration),
 // placed below the feeding chains, same sticky-left/sticky-right row layout as every other row.
 function ganttMilestoneRow(mi, m){
-  return `<div class="grow">
+  return `<div class="grow" style="background:rgba(110,198,232,0.10); border-radius:4px;">
     <div class="gsticky-l" style="border-left:4px solid #6EC6E8;">
       <span style="font-size:13px; width:22px; text-align:center; flex-shrink:0;">◆</span>
       <span class="chev"></span>
       ${inpText(m.name, `milestones[${mi}].name=this.value;`, 188)}
     </div>
     <div class="gtrack" id="gtrack-ms-${mi}" style="height:26px;">
+      <div id="ms-highlight-${mi}" style="position:absolute; top:0; bottom:0; width:10px; margin-left:-5px; background:rgba(110,198,232,0.35); border-radius:4px; display:none;"></div>
       <div id="ms-marker-${mi}" style="position:absolute; top:50%; transform:translate(-50%,-50%); width:24px; height:24px; display:none;">
         <svg viewBox="0 0 24 24" width="24" height="24">
           <polygon points="12,1 23,10 12,23 1,10" fill="#6EC6E8" stroke="#1F7FAE" stroke-width="1.2"></polygon>
@@ -1981,6 +2146,42 @@ function predsSummaryNames(kind,i,t){
   const names = idxs.map(pIdx => (all[pIdx]||{}).name || '').filter(Boolean);
   return names.join(' + ') || '—';
 }
+// name of a specific task/sub-task addressed by its unified # (topIdx) and, if a sub-task,
+// its 0-based index within the phase — used by the sub-task preds display helpers below.
+function subTaskLabel(topIdx, si){
+  const all = allTopLevelTasks();
+  const t = all[topIdx];
+  if(!t) return '';
+  if(si===null || si===undefined) return t.name;
+  return (t.subtasks[si]||{}).name || '';
+}
+// compact "N REL, N REL" summary of a sub-task's own preds string (mirrors predsLabelText, but
+// for the separate dotted-number-aware sub-task parser).
+function predsLabelTextSub(si, st){
+  const raw = String(st.preds||'').trim();
+  if(!raw) return si===0 ? '<span style="color:var(--text-muted);">phase start</span>' : '↑ above';
+  const parsed = parseSubPreds(raw);
+  if(!parsed.length) return '<span style="color:var(--red);">invalid</span>';
+  return parsed.map(p=>`${p.ref}${p.rel}`).join(', ');
+}
+// resolves a sub-task's preds string into the actual predecessor task/sub-task name(s), for
+// display in the Task list "Depends on" column.
+function predsSummaryNamesSub(si, st){
+  const raw = String(st.preds||'').trim();
+  if(!raw) return si===0 ? '<span style="color:var(--text-muted);">phase start</span>' : '↑ above';
+  const parsed = parseSubPreds(raw);
+  if(!parsed.length) return '<span style="color:var(--red);">invalid</span>';
+  const names = parsed.map(p => {
+    if(!p.ref) return '';
+    const refStr = String(p.ref);
+    if(refStr.indexOf('.')>=0){
+      const parts = refStr.split('.');
+      return subTaskLabel(parseInt(parts[0],10)-1, parseInt(parts[1],10)-1);
+    }
+    return subTaskLabel(parseInt(refStr,10)-1, null);
+  }).filter(Boolean);
+  return names.join(' + ') || '—';
+}
 
 function ganttTopRow(kind, i, t){
   const path = taskPath(kind, i, null);
@@ -2001,6 +2202,7 @@ function ganttTopRow(kind, i, t){
       ${typeLabel}
       ${relCell}
       ${pctCell}
+      ${(!sub && t.manualStart!=null) ? iconBtn('target-arrow', `clearManualStart('crit',${i},null)`, 'Pinned by drag — click to go back to automatic scheduling') : ''}
       ${iconBtn('list-tree', `addSubtask('crit',${i})`, 'Add sub-task')}
       ${sub ? '' : iconBtn('corner-down-right', `moveAsSubtask('crit',${i})`, 'Move this task under another task, making it a sub-task')}
       ${criticalTasks.length>1 ? iconBtn('trash', `removeCriticalTask(${i})`, 'Remove') : ''}
@@ -2012,6 +2214,7 @@ function ganttTopRow(kind, i, t){
       ${typeLabel}
       ${relCell}
       ${pctCell}
+      ${(!sub && t.manualStart!=null) ? iconBtn('target-arrow', `clearManualStart('feed',${i},null)`, 'Pinned by drag — click to go back to automatic scheduling') : ''}
       ${iconBtn('list-tree', `addSubtask('feed',${i})`, 'Add sub-task')}
       ${sub ? '' : iconBtn('corner-down-right', `moveAsSubtask('feed',${i})`, 'Move this task under another task, making it a sub-task')}
       ${iconBtn('trash', `removeFeedingChain(${i})`, 'Remove')}
@@ -2027,7 +2230,7 @@ function ganttTopRow(kind, i, t){
       ${durCell}
     </div>
     <div class="gtrack" id="gtrack-${kind}-${i}" style="height:22px;">
-      <div id="bar-${kind}-${i}" class="${sub?'bar-phase':''}" style="position:absolute; top:2px; bottom:2px; border-radius:4px; overflow:hidden; background:${pc.base};">
+      <div id="bar-${kind}-${i}" class="${sub?'bar-phase':'drag-bar'}" data-kind="${kind}" data-i="${i}" data-si="" style="position:absolute; top:2px; bottom:2px; border-radius:4px; overflow:hidden; background:${pc.base}; ${!sub && t.manualStart!=null ? 'outline:1.5px dashed var(--gold); outline-offset:1px;' : ''}">
         <div class="progress-fill" id="prog-${kind}-${i}"></div>
         <div class="resize-handle" data-kind="${kind}" data-i="${i}" data-si=""></div>
       </div>
@@ -2040,6 +2243,14 @@ function ganttTopRow(kind, i, t){
   </div>`;
 }
 
+// unified predecessor-reference input for a SUB-task — same syntax as predsInput() for top-level
+// tasks, but also accepts a dotted sub-task # (e.g. "1.1FS") so a sub-task can depend on another
+// sub-task anywhere in the project, not just the one directly above it in its own phase.
+function predsInputSub(path, st, kind, i, si){
+  const val = String(st.preds===undefined ? '' : st.preds).replace(/"/g,'&quot;');
+  const placeholder = si===0 ? 'phase start' : '↑ above';
+  return `<input type="text" value="${val}" onchange="${path}.preds=this.value; update();" placeholder="${placeholder}" title="Predecessor #(s) + relation — accepts a phase # (e.g. 2FS) or a specific sub-task # (e.g. 1.1FS), same as the # column. Multiple allowed, comma-separated. Leave blank to default to ${si===0?"this phase's own start":"the sub-task directly above"}." style="width:74px; flex-shrink:0; font-size:9.5px; height:24px; padding:0 2px; text-align:center;">`;
+}
 function ganttSubRow(kind, i, si, st){
   const path = taskPath(kind, i, si);
   const pc = phaseColor(kind,i);
@@ -2060,7 +2271,7 @@ function ganttSubRow(kind, i, si, st){
       ${bufInput}
     </div>
     <div class="gtrack" id="gtrack-${kind}-${i}-s-${si}" style="height:18px;">
-      <div id="bar-${kind}-${i}-s-${si}" style="position:absolute; top:1px; bottom:1px; border-radius:3px; overflow:hidden; background:${pc.light};">
+      <div id="bar-${kind}-${i}-s-${si}" class="drag-bar" data-kind="${kind}" data-i="${i}" data-si="${si}" style="position:absolute; top:1px; bottom:1px; border-radius:3px; overflow:hidden; background:${pc.light}; ${st.manualStart!=null ? 'outline:1.5px dashed var(--gold); outline-offset:1px;' : ''}">
         <div class="progress-fill" id="prog-${kind}-${i}-s-${si}"></div>
         <div class="resize-handle" data-kind="${kind}" data-i="${i}" data-si="${si}"></div>
       </div>
@@ -2071,7 +2282,9 @@ function ganttSubRow(kind, i, si, st){
     <div class="gsticky-r">
       <span id="gdoer-${kind}-${i}-s-${si}" style="font-size:9.5px; color:var(--text-secondary); font-style:italic; flex-shrink:0; max-width:80px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="Doer">${escHtml(st.owner||'')}</span>
       <span style="font-size:9.5px; color:var(--text-muted); flex-shrink:0;">sub</span>
+      ${predsInputSub(path, st, kind, i, si)}
       ${inpPct(st.pct, path, 40)}%
+      ${st.manualStart!=null ? iconBtn('target-arrow', `clearManualStart('${kind}',${i},${si})`, 'Pinned by drag — click to go back to automatic scheduling') : ''}
       ${iconBtn('trash', `removeSubtask('${kind}',${i},${si})`, 'Remove sub-task')}
       <button class="iconbtn" onclick="openLink(${path})" title="${st.link ? 'Open link: '+st.link : 'No link set — add one in the Task list tab'}" style="${st.link ? '' : 'opacity:0.35;'}"><i class="ti ti-external-link"></i></button>
     </div>
@@ -2287,6 +2500,51 @@ function attachResizeHandles(){
     };
   });
 }
+// drag a bar left/right on the Gantt chart to pin an exact start day, bypassing predecessor/
+// buffer scheduling for that one task — only wired onto leaf bars (bare tasks + every sub-task;
+// phase rollup bars aren't draggable since their position is always derived from their children).
+// A short drag threshold (3px) avoids hijacking a plain click intended for something else layered
+// under the bar.
+function attachDragHandles(){
+  document.querySelectorAll('.drag-bar').forEach(el => {
+    el.onpointerdown = function(ev){
+      if(ev.target && ev.target.classList && ev.target.classList.contains('resize-handle')) return; // let the resize handle's own listener handle this
+      ev.preventDefault();
+      const kind = el.dataset.kind;
+      const i = Number(el.dataset.i);
+      const si = el.dataset.si===''? null : Number(el.dataset.si);
+      const t = taskFromHandle(kind, i, si);
+      if(!t) return;
+      const startX = ev.clientX;
+      const startDay = Number(t.start)||0;
+      const pxw = pxPerDay();
+      let moved = false;
+      try{ el.setPointerCapture(ev.pointerId); }catch(e){}
+      function onMove(mv){
+        const dx = mv.clientX - startX;
+        if(Math.abs(dx) > 3) moved = true;
+        if(!moved) return;
+        const dayDelta = Math.round(dx/pxw);
+        t.manualStart = Math.max(0, startDay + dayDelta);
+        update();
+      }
+      function onUp(){
+        el.removeEventListener('pointermove', onMove);
+        el.removeEventListener('pointerup', onUp);
+        if(moved) createAll();
+      }
+      el.addEventListener('pointermove', onMove);
+      el.addEventListener('pointerup', onUp);
+    };
+  });
+}
+// releases a manually-dragged task back to normal predecessor/buffer-driven scheduling.
+function clearManualStart(kind, i, si){
+  const t = taskFromHandle(kind, i, si);
+  if(!t) return;
+  t.manualStart = null;
+  createAll();
+}
 
 function createAll(){
   schedule();
@@ -2329,6 +2587,7 @@ function createAll(){
   document.getElementById('grows').innerHTML = g;
   applyZoomWidths();
   attachResizeHandles();
+  attachDragHandles();
 
   let l = '';
   function listTopRow(kind, i, t, label, feedsInto){
@@ -2400,8 +2659,8 @@ function createAll(){
       <td class="l" style="padding-left:20px;">${inpText(st.name, `${path}.name=this.value; update();`, 126)}</td>
       <td class="l" style="padding-left:8px;">${doerCell}</td>
       <td class="l"><span style="font-size:10px; color:var(--text-muted);">sub-task</span></td>
-      <td class="l"></td>
-      <td></td>
+      <td class="l" style="color:var(--text-muted); font-size:11px;">${predsSummaryNamesSub(si,st)}</td>
+      <td style="font-size:11px; font-weight:600;">${predsLabelTextSub(si,st)}</td>
       <td class="l" style="padding-left:8px;">${critCell}</td>
       <td>${bufCell}</td>
       <td>${inpDur(st.duration, `${path}.duration=Math.max(1,Number(this.value)||1); update();`, 50)}</td>
