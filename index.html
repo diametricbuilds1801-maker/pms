@@ -2262,9 +2262,18 @@ function attachResizeHandles(){
 function createAll(){
   schedule();
   let g = '';
+  const placedMilestones = new Set();
+  function milestonesAfter(num){
+    let out = '';
+    milestones.forEach((m,mi) => {
+      if(String(m.predNum)===String(num) && m.predNum!==''){ out += ganttMilestoneRow(mi, m); placedMilestones.add(mi); }
+    });
+    return out;
+  }
   criticalTasks.forEach((t,i) => {
     g += ganttTopRow('crit', i, t);
     if(t.expanded && hasSub(t)) t.subtasks.forEach((st,si) => { g += ganttSubRow('crit', i, si, st); });
+    g += milestonesAfter(i+1);
   });
   g += `<div style="padding:6px 0 6px 250px;"><button onclick="addCriticalTask()" style="font-size:12px; padding:5px 10px;"><i class="ti ti-plus" style="font-size:13px; vertical-align:-2px; margin-right:4px;"></i>Add critical task</button></div>`;
   g += `<div class="grow">
@@ -2277,11 +2286,16 @@ function createAll(){
     const t = fc.tasks[0];
     g += ganttTopRow('feed', ci, t);
     if(t.expanded && hasSub(t)) t.subtasks.forEach((st,si) => { g += ganttSubRow('feed', ci, si, st); });
+    g += milestonesAfter(criticalTasks.length + ci + 1);
   });
   g += `<div style="padding:6px 0 6px 250px;"><button onclick="addFeedingChain()" style="font-size:12px; padding:5px 10px;"><i class="ti ti-plus" style="font-size:13px; vertical-align:-2px; margin-right:4px;"></i>Add feeding chain</button></div>`;
-  if(milestones.length){
-    g += `<div style="height:12px;"></div>`;
-    milestones.forEach((m,mi) => { g += ganttMilestoneRow(mi, m); });
+  {
+    // milestones with no predecessor picked yet (or one that no longer resolves) have nowhere
+    // contextual to sit — list them here so they're still visible/editable rather than silently
+    // dropped from the Gantt tab.
+    let leftover = '';
+    milestones.forEach((m,mi) => { if(!placedMilestones.has(mi)) leftover += ganttMilestoneRow(mi, m); });
+    if(leftover){ g += `<div style="height:12px;"></div>` + leftover; }
   }
   document.getElementById('grows').innerHTML = g;
   applyZoomWidths();
