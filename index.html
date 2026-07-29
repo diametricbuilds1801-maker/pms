@@ -2018,17 +2018,17 @@ function removeMilestone(mi){ milestones.splice(mi,1); renderMilestoneRows(); cr
 // one Gantt row per milestone — a diamond marker at a single point in time (no bar/duration),
 // placed below the feeding chains, same sticky-left/sticky-right row layout as every other row.
 function ganttMilestoneRow(mi, m){
-  return `<div class="grow" style="background:rgba(110,198,232,0.10); border-radius:4px;">
-    <div class="gsticky-l" style="border-left:4px solid #6EC6E8;">
-      <span style="font-size:13px; width:22px; text-align:center; flex-shrink:0;">◆</span>
+  return `<div class="grow" style="background:rgba(31,127,174,0.16); border-radius:4px; outline:1px solid rgba(31,127,174,0.25); outline-offset:-1px;">
+    <div class="gsticky-l" style="border-left:4px solid #1F7FAE; background:rgba(31,127,174,0.06);">
+      <span style="font-size:15px; width:22px; text-align:center; flex-shrink:0; color:#1F7FAE;">◆</span>
       <span class="chev"></span>
       ${inpText(m.name, `milestones[${mi}].name=this.value;`, 188)}
     </div>
-    <div class="gtrack" id="gtrack-ms-${mi}" style="height:26px;">
-      <div id="ms-highlight-${mi}" style="position:absolute; top:0; bottom:0; width:10px; margin-left:-5px; background:rgba(110,198,232,0.35); border-radius:4px; display:none;"></div>
-      <div id="ms-marker-${mi}" style="position:absolute; top:50%; transform:translate(-50%,-50%); width:24px; height:24px; display:none;">
-        <svg viewBox="0 0 24 24" width="24" height="24">
-          <polygon points="12,1 23,10 12,23 1,10" fill="#6EC6E8" stroke="#1F7FAE" stroke-width="1.2"></polygon>
+    <div class="gtrack" id="gtrack-ms-${mi}" style="height:28px;">
+      <div id="ms-highlight-${mi}" style="position:absolute; top:0; bottom:0; width:16px; margin-left:-8px; background:rgba(31,127,174,0.45); border-left:1.5px dashed #1F7FAE; border-right:1.5px dashed #1F7FAE; display:none;"></div>
+      <div id="ms-marker-${mi}" style="position:absolute; top:50%; transform:translate(-50%,-50%); width:26px; height:26px; display:none;">
+        <svg viewBox="0 0 24 24" width="26" height="26">
+          <polygon points="12,1 23,10 12,23 1,10" fill="#6EC6E8" stroke="#1F7FAE" stroke-width="1.5"></polygon>
           <polygon points="12,1 18,10 12,9" fill="#C6EEFB"></polygon>
           <polygon points="12,1 6,10 12,9" fill="#9CDDF2"></polygon>
           <polygon points="1,10 12,9 12,23" fill="#4FAFD9"></polygon>
@@ -2038,7 +2038,7 @@ function ganttMilestoneRow(mi, m){
       <div class="bar-label" id="ms-lbl-${mi}"></div>
       <div class="todayline"></div>
     </div>
-    <div class="gsticky-r">
+    <div class="gsticky-r" style="background:rgba(31,127,174,0.06);">
       <span style="font-size:9.5px; color:var(--text-muted); flex-shrink:0;">milestone</span>
       ${iconBtn('trash', `removeMilestone(${mi})`, 'Remove milestone')}
     </div>
