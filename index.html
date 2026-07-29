@@ -98,7 +98,8 @@
     #tab-gantt, #tab-list, #tab-vendors { overflow-x: visible !important; }
     body { padding: 0.5rem; }
     body.printing #tab-summary, body.printing #tab-gantt, body.printing #tab-list,
-    body.printing #tab-lookahead, body.printing #tab-daily, body.printing #tab-vendors { display: block !important; }
+    body.printing #tab-lookahead, body.printing #tab-daily, body.printing #tab-vendors,
+    body.printing #tab-milestones { display: block !important; }
   }
 </style>
 </head>
@@ -116,11 +117,7 @@
       </div>
     </div>
     <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;" class="no-print">
-      <button onclick="exportJSON()" style="font-size:12px; padding:6px 12px;"><i class="ti ti-download" style="font-size:14px; vertical-align:-2px; margin-right:4px;"></i>Save data</button>
-      <button onclick="document.getElementById('importfile').click()" style="font-size:12px; padding:6px 12px;"><i class="ti ti-upload" style="font-size:14px; vertical-align:-2px; margin-right:4px;"></i>Load data</button>
       <input type="file" id="importfile" accept=".json" style="display:none;" onchange="importJSON(event)">
-      <button id="btn-undo" onclick="undo()" title="Undo (Ctrl+Z)" style="font-size:12px; padding:6px 12px;"><i class="ti ti-arrow-back-up" style="font-size:14px; vertical-align:-2px; margin-right:4px;"></i>Undo</button>
-      <button id="btn-redo" onclick="redo()" title="Redo (Ctrl+Y)" style="font-size:12px; padding:6px 12px;"><i class="ti ti-arrow-forward-up" style="font-size:14px; vertical-align:-2px; margin-right:4px;"></i>Redo</button>
       <button onclick="resetAll()" style="font-size:12px; padding:6px 12px;" title="Restore this file's original sample data"><i class="ti ti-refresh" style="font-size:14px; vertical-align:-2px; margin-right:4px;"></i>Reset</button>
       <button onclick="newProject()" style="font-size:12px; padding:6px 12px;" title="Start a new project — keeps the standard 135-task template pre-filled (reset to 0% progress), but clears the project name, client, location and dates for you to fill in"><i class="ti ti-file-plus" style="font-size:14px; vertical-align:-2px; margin-right:4px;"></i>New project</button>
       <span style="width:0.5px; height:22px; background:var(--border-strong); margin:0 2px;"></span>
@@ -141,6 +138,7 @@
     <button class="tabbtn" id="tb-lookahead" onclick="showTab('lookahead')">3 days planning</button>
     <button class="tabbtn" id="tb-daily" onclick="showTab('daily')">Daily follow-up</button>
     <button class="tabbtn" id="tb-vendors" onclick="showTab('vendors')">Material &amp; Resource</button>
+    <button class="tabbtn" id="tb-milestones" onclick="showTab('milestones')">Predecessor Successor</button>
   </div>
 
   <h2 class="print-heading">Summary</h2>
@@ -183,7 +181,7 @@
       <button class="iconbtn" onclick="refreshProjectList()" title="Refresh the list of projects" style="width:28px; height:28px;"><i class="ti ti-refresh" style="font-size:14px;"></i></button>
       <span id="project-list-status" style="font-size:11px; color:var(--text-secondary);"></span>
     </div>
-    <p style="font-size:11px; color:var(--text-secondary); margin:4px 0 0; max-width:900px;">Lists every project that has synced at least once to this Drive folder. Picking one loads its saved data into this tool for editing — your current unsaved edits here are replaced (use "Save data" first if you want a backup).</p>
+    <p style="font-size:11px; color:var(--text-secondary); margin:4px 0 0; max-width:900px;">Lists every project that has synced at least once to this Drive folder. Picking one loads its saved data into this tool for editing — your current unsaved edits here are replaced.</p>
 
     <p style="font-size:13px; font-weight:600; color:var(--gold); margin:20px 0 8px; border-top:0.5px solid var(--border); padding-top:14px;">Project team</p>
     <table style="border-collapse:collapse; width:100%; max-width:700px;">
@@ -369,6 +367,20 @@
     <div style="padding:8px 0;"><button onclick="addVendorRow()" style="font-size:12px; padding:5px 10px;"><i class="ti ti-plus" style="font-size:13px; vertical-align:-2px; margin-right:4px;"></i>Add vendor payment</button></div>
   </div>
 
+  <h2 class="print-heading">Predecessor Successor</h2>
+  <div id="tab-milestones" style="display:none; background:var(--surface-2); border:0.5px solid var(--border); border-top:none; border-radius:0 0 8px 8px; padding:1.2rem; overflow-x:auto;">
+    <p style="font-size:13px; font-weight:600; color:var(--gold); margin:0 0 6px;">Milestones</p>
+    <p style="font-size:12px; color:var(--text-secondary); margin:0 0 10px; max-width:900px;">A milestone is a zero-duration marker (no duration of its own) placed on a specific date — it doesn't get typed in directly. Instead, pick which task it follows (its <b>predecessor</b>); the milestone's date is automatically set to that task's planned finish date, and updates on its own whenever that task's schedule shifts. It shows up on the Gantt chart as a small diamond marker alongside the tasks.</p>
+    <table style="border-collapse:collapse; width:100%; max-width:900px;">
+      <thead>
+        <tr><th class="l">Milestone name</th><th class="l">Predecessor task</th><th>Date</th><th></th></tr>
+      </thead>
+      <tbody id="mrows"></tbody>
+    </table>
+    <p id="m-empty" style="display:none; font-size:12.5px; color:var(--text-muted); margin-top:10px;">No milestones added yet.</p>
+    <div style="padding:10px 0;"><button onclick="addMilestone()" style="font-size:12px; padding:5px 10px;"><i class="ti ti-plus" style="font-size:13px; vertical-align:-2px; margin-right:4px;"></i>Add milestone</button></div>
+  </div>
+
 </div>
 
 <!-- Hidden write channel for Google Sheet sync: a real <form> submitted into a hidden <iframe> is
@@ -426,7 +438,7 @@ function scheduleLocalSave(){
 }
 function saveLocal(){
   try {
-    const snap = JSON.stringify({meta, lookahead, daily, readiness_, zoomPct, criticalTasks, feedingChains, vendorPayments, syncUrl, autoSync, projectExists, hasUnsyncedEdits});
+    const snap = JSON.stringify({meta, lookahead, daily, readiness_, zoomPct, criticalTasks, feedingChains, vendorPayments, milestones, syncUrl, autoSync, projectExists, hasUnsyncedEdits});
     localStorage.setItem(LOCAL_KEY, snap);
     localStorage.setItem(LOCAL_KEY + '_savedAt', new Date().toISOString());
     const el = document.getElementById('local-save-status');
@@ -735,7 +747,11 @@ let vendorPayments = [
   {vendor:"CLIENT MILESTONE", wo:"—", desc:"On completion of flooring & second fix", schedDate:"2028-02-10", schedAmt:9000, actDate:"", actAmt:'', notes:""},
   {vendor:"CLIENT MILESTONE", wo:"—", desc:"On handover", schedDate:"2028-06-15", schedAmt:9200, actDate:"", actAmt:'', notes:"Release against signed handover note."},
 ];
-const origState = JSON.stringify({meta, lookahead, daily, readiness_, zoomPct, criticalTasks, feedingChains, vendorPayments, syncUrl, autoSync});
+// milestones — zero-duration markers dated off a predecessor task's finish. Kept as its own array,
+// parallel to vendorPayments, and threaded through every save/load/sync path the same way
+// vendorPayments already is, so nothing about the existing sync/switch-project flow changes.
+let milestones = [];
+const origState = JSON.stringify({meta, lookahead, daily, readiness_, zoomPct, criticalTasks, feedingChains, vendorPayments, milestones, syncUrl, autoSync});
 
 function fmt(n){ return Math.round(n*10)/10; }
 function money(n){ const r = Math.round(n*10)/10; return (r>0?'+':'') + r.toLocaleString('en-IN'); }
@@ -1334,6 +1350,7 @@ function update(){
   renderDaily();
   renderReadiness();
   patchVendors();
+  patchMilestones(total);
   renderVendorSuggestions();
   renderStats();
   renderUndoRedoState();
@@ -1776,6 +1793,78 @@ function patchVendors(){
 }
 function addVendorRow(){ vendorPayments.push({vendor:'', wo:'', desc:'', schedDate:'', schedAmt:0, actDate:'', actAmt:'', notes:''}); renderVendorRows(); update(); }
 function removeVendorRow(i){ vendorPayments.splice(i,1); renderVendorRows(); update(); }
+
+// ---------------- Milestones (Predecessor Successor tab) ----------------
+// A milestone has no duration of its own — its date is always DERIVED from its predecessor task's
+// planned finish (taskByNumber(m.predNum).t.end), recomputed every update() so it tracks that
+// task automatically if its schedule shifts. predNum uses the same unified task # taskByNumber()
+// already resolves (top-level critical/feeding tasks only, matching the Task list "#" column).
+function milestoneDay(m){
+  const target = taskByNumber(m.predNum);
+  return target ? target.t.end : null;
+}
+function milestoneRowHtml(m, mi){
+  const opts = allTopLevelTasks().map((t,idx) => {
+    const num = idx+1;
+    return `<option value="${num}" ${String(m.predNum)===String(num)?'selected':''}>${num}. ${escHtml(shortName(t.name))}</option>`;
+  }).join('');
+  return `<tr>
+    <td class="l">${inpText(m.name, `milestones[${mi}].name=this.value;`, 220)}</td>
+    <td class="l"><select onchange="milestones[${mi}].predNum=this.value; update();" style="width:220px; font-size:11.5px; height:26px;"><option value="">— choose predecessor task —</option>${opts}</select></td>
+    <td id="mdate-${mi}" style="color:var(--text-secondary);"></td>
+    <td>${iconBtn('trash', `removeMilestone(${mi})`, 'Remove')}</td>
+  </tr>`;
+}
+function renderMilestoneRows(){
+  const el = document.getElementById('mrows'); if(!el) return;
+  el.innerHTML = milestones.map(milestoneRowHtml).join('');
+  const empty = document.getElementById('m-empty');
+  if(empty) empty.style.display = milestones.length ? 'none' : 'block';
+}
+// fills in each milestone's computed date (Task table) and repositions its diamond marker + label
+// on the Gantt chart — called from update() so it stays live as predecessor tasks shift, without
+// needing a full createAll() rebuild.
+function patchMilestones(total){
+  milestones.forEach((m,mi) => {
+    const day = milestoneDay(m);
+    setT('mdate-'+mi, day!==null ? fmtD(dateAt(day)) : '—');
+    const markerEl = document.getElementById('ms-marker-'+mi);
+    const lblEl = document.getElementById('ms-lbl-'+mi);
+    if(markerEl){
+      if(day!==null){
+        markerEl.style.display = 'block';
+        markerEl.style.left = (total>0 ? (day/total*100) : 0).toFixed(2)+'%';
+        markerEl.title = (m.name||'Milestone') + ' — ' + fmtD(dateAt(day));
+      } else { markerEl.style.display = 'none'; }
+    }
+    if(lblEl){
+      lblEl.innerHTML = day!==null ? `<b>◆ ${escHtml(m.name||'Milestone')}</b>` : '';
+      lblEl.style.left = (total>0 ? ((day||0)/total*100) : 0).toFixed(2)+'%';
+    }
+  });
+}
+function addMilestone(){ milestones.push({name:'New milestone', predNum:''}); renderMilestoneRows(); createAll(); }
+function removeMilestone(mi){ milestones.splice(mi,1); renderMilestoneRows(); createAll(); }
+// one Gantt row per milestone — a diamond marker at a single point in time (no bar/duration),
+// placed below the feeding chains, same sticky-left/sticky-right row layout as every other row.
+function ganttMilestoneRow(mi, m){
+  return `<div class="grow">
+    <div class="gsticky-l" style="border-left:4px solid var(--gold);">
+      <span style="font-size:12px; color:var(--gold); width:22px; text-align:center; flex-shrink:0;">◆</span>
+      <span class="chev"></span>
+      ${inpText(m.name, `milestones[${mi}].name=this.value;`, 188)}
+    </div>
+    <div class="gtrack" id="gtrack-ms-${mi}" style="height:22px;">
+      <div id="ms-marker-${mi}" style="position:absolute; top:50%; width:11px; height:11px; margin-left:-5.5px; margin-top:-5.5px; background:var(--gold); border:1px solid var(--surface-2); transform:rotate(45deg); border-radius:2px; display:none;"></div>
+      <div class="bar-label" id="ms-lbl-${mi}"></div>
+      <div class="todayline"></div>
+    </div>
+    <div class="gsticky-r">
+      <span style="font-size:9.5px; color:var(--text-muted); flex-shrink:0;">milestone</span>
+      ${iconBtn('trash', `removeMilestone(${mi})`, 'Remove milestone')}
+    </div>
+  </div>`;
+}
 // unique vendor names already used anywhere (task assignments + Material & Resource payments),
 // offered as autocomplete suggestions on the Task List "Vendor" field so names stay consistent.
 function vendorSuggestions(){
@@ -2190,6 +2279,10 @@ function createAll(){
     if(t.expanded && hasSub(t)) t.subtasks.forEach((st,si) => { g += ganttSubRow('feed', ci, si, st); });
   });
   g += `<div style="padding:6px 0 6px 250px;"><button onclick="addFeedingChain()" style="font-size:12px; padding:5px 10px;"><i class="ti ti-plus" style="font-size:13px; vertical-align:-2px; margin-right:4px;"></i>Add feeding chain</button></div>`;
+  if(milestones.length){
+    g += `<div style="height:12px;"></div>`;
+    milestones.forEach((m,mi) => { g += ganttMilestoneRow(mi, m); });
+  }
   document.getElementById('grows').innerHTML = g;
   applyZoomWidths();
   attachResizeHandles();
@@ -2315,6 +2408,7 @@ function createAll(){
 
   renderVendorRows();
   renderTeamRows();
+  renderMilestoneRows();
 
   document.getElementById('m-name').value = meta.name;
   document.getElementById('m-client').value = meta.client;
@@ -2375,7 +2469,7 @@ async function autoPullLatest(){
       suppressSnapshot = true;
       meta = s.meta; criticalTasks = s.criticalTasks; feedingChains = s.feedingChains;
       lookahead = s.lookahead || lookahead; daily = s.daily || daily; readiness_ = s.readiness_ || readiness_;
-      zoomPct = s.zoomPct || zoomPct; vendorPayments = s.vendorPayments || [];
+      zoomPct = s.zoomPct || zoomPct; vendorPayments = s.vendorPayments || []; milestones = s.milestones || [];
       if(!meta.dayStart) meta.dayStart = '08:00';
       if(meta.qaLink===undefined) meta.qaLink = '';
       if(!meta.team) meta.team = emptyTeam();
@@ -2415,7 +2509,7 @@ function showTab(id){
   // guaranteed-fresh rebuild — whichever tab you land on always reflects the latest edits made
   // anywhere else.
   createAll();
-  ['summary','gantt','list','lookahead','daily','vendors'].forEach(t => {
+  ['summary','gantt','list','lookahead','daily','vendors','milestones'].forEach(t => {
     document.getElementById('tab-'+t).style.display = (t===id) ? 'block' : 'none';
     document.getElementById('tb-'+t).classList.toggle('active', t===id);
   });
@@ -2662,13 +2756,13 @@ function dropRow(kind,i){
   dragSrcKind = null; dragSrcIndex = null;
 }
 function snapshotState(){
-  return JSON.stringify({meta, lookahead, daily, readiness_, zoomPct, criticalTasks, feedingChains, vendorPayments});
+  return JSON.stringify({meta, lookahead, daily, readiness_, zoomPct, criticalTasks, feedingChains, vendorPayments, milestones});
 }
 function restoreState(snap){
   const s = JSON.parse(snap);
   suppressSnapshot = true;
   meta = s.meta; lookahead = s.lookahead; daily = s.daily; readiness_ = s.readiness_||{days:7}; zoomPct = s.zoomPct||100;
-  criticalTasks = s.criticalTasks; feedingChains = s.feedingChains; vendorPayments = s.vendorPayments;
+  criticalTasks = s.criticalTasks; feedingChains = s.feedingChains; vendorPayments = s.vendorPayments; milestones = s.milestones||[];
   createAll();
   suppressSnapshot = false;
   renderUndoRedoState();
@@ -2710,7 +2804,7 @@ function resetAll(){
   const s = JSON.parse(origState);
   suppressSnapshot = true;
   meta = s.meta; lookahead = s.lookahead; daily = s.daily; readiness_ = s.readiness_||{days:7}; zoomPct = s.zoomPct||100;
-  criticalTasks = s.criticalTasks; feedingChains = s.feedingChains; vendorPayments = s.vendorPayments;
+  criticalTasks = s.criticalTasks; feedingChains = s.feedingChains; vendorPayments = s.vendorPayments; milestones = s.milestones||[];
   syncUrl = s.syncUrl||''; autoSync = s.autoSync||false;
   projectExists = false; // sample data is local-only until "Create project" is clicked again
   confirmedProjectName = '';
@@ -2728,7 +2822,7 @@ function resetAll(){
 // Script endpoint doesn't need to be re-pasted — sync just starts writing to a NEW Sheet once the
 // Project name (in Project details) is changed to something the backend hasn't seen before.
 function newProject(){
-  if(!confirm('Start a brand new project? This clears the Project name, client, location and dates, and resets progress/dates on every task — but keeps the standard task list (rename/adjust tasks as needed for this project). This cannot be undone (use Save data first if you want to keep a backup).')) return;
+  if(!confirm('Start a brand new project? This clears the Project name, client, location and dates, and resets progress/dates on every task — but keeps the standard task list (rename/adjust tasks as needed for this project). This cannot be undone.')) return;
   clearTimeout(syncTimer); // cancel any auto-sync still queued for the project we're leaving
   clearTimeout(fallbackRetryTimer);
   syncDirty = false;
@@ -2742,6 +2836,7 @@ function newProject(){
   criticalTasks = s.criticalTasks;
   feedingChains = s.feedingChains;
   vendorPayments = [];
+  milestones = [];
   // wipe per-task progress/actuals so the template starts fresh for the new project, while
   // keeping names/durations/budgets/owners/vendors/notes as the template defines them
   function resetProgress(t){
@@ -2843,11 +2938,11 @@ function buildSyncPayload(){
       promisedDeliveryDate: meta.deliveryDate || ''
     },
     dashboard,
-    criticalTasks: crit, feedingChains: feed, vendorPayments,
+    criticalTasks: crit, feedingChains: feed, vendorPayments, milestones,
     lookahead, daily, lookaheadList, dailyList, readinessList,
     // the exact editable state (same shape exportJSON() saves) — stored in the Sheet's hidden
     // _data tab so the "Switch project" dropdown can load this project back into the tool later.
-    rawState: JSON.stringify({meta, lookahead, daily, readiness_, zoomPct, criticalTasks, feedingChains, vendorPayments, syncUrl, autoSync}),
+    rawState: JSON.stringify({meta, lookahead, daily, readiness_, zoomPct, criticalTasks, feedingChains, vendorPayments, milestones, syncUrl, autoSync}),
     syncedAt: new Date().toISOString()
   };
 }
@@ -3062,7 +3157,7 @@ async function onProjectPicked(name){
         daily = s2.daily || {date: new Date().toISOString().slice(0,10)};
         readiness_ = s2.readiness_ || {days: 7};
         zoomPct = s2.zoomPct || 100;
-        vendorPayments = s2.vendorPayments || [];
+        vendorPayments = s2.vendorPayments || []; milestones = s2.milestones || [];
         if(!meta.dayStart) meta.dayStart = '08:00';
         if(meta.qaLink===undefined) meta.qaLink = '';
         if(!meta.team) meta.team = emptyTeam();
@@ -3094,6 +3189,7 @@ async function onProjectPicked(name){
       criticalTasks = s.criticalTasks;
       feedingChains = s.feedingChains;
       vendorPayments = [];
+      milestones = [];
       function resetProgress(t){
         t.pct = 0; t.act = ''; t.adate = ''; t.qcDone = false;
         t.infoReady = false; t.materialReady = false; t.labourReady = false;
@@ -3123,7 +3219,7 @@ async function onProjectPicked(name){
     daily = s.daily || {date: new Date().toISOString().slice(0,10)};
     readiness_ = s.readiness_ || {days: 7};
     zoomPct = s.zoomPct || 100;
-    vendorPayments = s.vendorPayments || [];
+    vendorPayments = s.vendorPayments || []; milestones = s.milestones || [];
     if(!meta.dayStart) meta.dayStart = '08:00';
     if(meta.qaLink===undefined) meta.qaLink = '';
     if(!meta.team) meta.team = emptyTeam();
@@ -3143,7 +3239,7 @@ async function onProjectPicked(name){
   }
 }
 function exportJSON(){
-  const blob = new Blob([JSON.stringify({meta, lookahead, daily, readiness_, zoomPct, criticalTasks, feedingChains, vendorPayments, syncUrl, autoSync}, null, 2)], {type:'application/json'});
+  const blob = new Blob([JSON.stringify({meta, lookahead, daily, readiness_, zoomPct, criticalTasks, feedingChains, vendorPayments, milestones, syncUrl, autoSync}, null, 2)], {type:'application/json'});
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
   a.download = 'DB_Planning_Project_data.json';
@@ -3165,6 +3261,7 @@ function importJSON(evt){
         zoomPct = s.zoomPct || 100;
         syncUrl = s.syncUrl || ''; autoSync = s.autoSync || false;
         vendorPayments = s.vendorPayments || [];
+        milestones = s.milestones || [];
         // older save files may carry a "linked" or "between" field from a previous version of the
         // tool that tied a payment to a Gantt marker — that feature was removed, so just drop it.
         vendorPayments.forEach(v => { delete v.linked; delete v.between; });
@@ -3234,6 +3331,7 @@ if(typeof window.addEventListener === 'function'){
   criticalTasks = s.criticalTasks || criticalTasks;
   feedingChains = s.feedingChains || feedingChains;
   vendorPayments = s.vendorPayments || vendorPayments;
+  milestones = s.milestones || milestones;
   if(s.syncUrl) syncUrl = s.syncUrl;
   if(s.autoSync !== undefined) autoSync = s.autoSync;
   if(!meta.dayStart) meta.dayStart = '08:00';
