@@ -497,6 +497,7 @@ let suppressSnapshot = false;
 let snapTimer = null;
 let dragSrcKind = null;
 let dragSrcIndex = null;
+let dragSrcSi = null;
 
 // preds is the unified predecessor-reference string, e.g. "2FS,3SS" — a task can list any number
 // of comma-separated "task# + relation" entries (task# is the unified # shown in the # column,
@@ -2031,6 +2032,40 @@ function addMilestone(){ milestones.push({name:'New milestone', predNum:''}); re
 function removeMilestone(mi){ milestones.splice(mi,1); renderMilestoneRows(); createAll(); }
 // one Gantt row per milestone — a diamond marker at a single point in time (no bar/duration),
 // placed below the feeding chains, same sticky-left/sticky-right row layout as every other row.
+// a milestone shown as its own row in the Task list tab — same 20-column layout as every task
+// row (see the table header), with the columns that don't apply to a zero-duration marker left
+// blank. Mirrors ganttMilestoneRow's positioning logic (interleaved right after its predecessor).
+function milestoneListRow(mi, m){
+  const target = taskByNumber(m.predNum);
+  const day = target ? target.t.end : null;
+  const dateTxt = day!==null ? fmtD(dateAt(day)) : '—';
+  return `<tr style="background:rgba(31,127,174,0.06);">
+    <td style="color:#1F7FAE; font-weight:700; font-size:13px;">◆</td>
+    <td class="l">${inpText(m.name, `milestones[${mi}].name=this.value;`, 150)}</td>
+    <td class="l"></td>
+    <td class="l"><span style="color:#1F7FAE; font-weight:600; font-size:11px;">Milestone</span></td>
+    <td class="l" style="color:var(--text-muted); font-size:11px;">${target ? escHtml(target.t.name) : '<span style="color:var(--red);">no predecessor set</span>'}</td>
+    <td></td>
+    <td class="l"></td>
+    <td></td>
+    <td style="color:var(--text-muted);">0</td>
+    <td></td>
+    <td style="color:var(--text-secondary);">${dateTxt}</td>
+    <td style="color:var(--text-secondary);">${dateTxt}</td>
+    <td class="l"></td>
+    <td></td>
+    <td class="col-budget"></td><td class="col-budget"></td><td class="col-budget"></td>
+    <td class="l"></td><td class="l"></td>
+    <td class="l">${iconBtn('trash', `removeMilestone(${mi})`, 'Remove milestone')}</td>
+  </tr>`;
+}
+function milestoneListRowsAfter(num){
+  let out = '';
+  milestones.forEach((m,mi) => {
+    if(String(m.predNum)===String(num) && m.predNum!==''){ out += milestoneListRow(mi, m); }
+  });
+  return out;
+}
 function ganttMilestoneRow(mi, m){
   return `<div class="grow" style="background:rgba(31,127,174,0.16); border-radius:4px; outline:1px solid rgba(31,127,174,0.25); outline-offset:-1px;">
     <div class="gsticky-l" style="border-left:4px solid #1F7FAE; background:rgba(31,127,174,0.06);">
@@ -2668,7 +2703,7 @@ function createAll(){
     const bufCell = kind==='feed'
       ? inpBud(st.buffer||0, `${path}.buffer=this.value===''?0:(Number(this.value)||0); update();`, 50)
       : `<span style="color:var(--text-muted);">—</span>`;
-    return `<tr style="background:rgba(176,141,62,0.04);">
+    return `<tr draggable="true" ondragstart="dragStartRow('${kind}',${i},${si})" ondragover="dragOverRow(event)" ondrop="dropRow('${kind}',${i},${si})" style="background:rgba(176,141,62,0.04);">
       <td style="color:var(--gold); font-weight:600; font-size:11px;">${taskNumber(kind,i,si)}</td>
       <td class="l" style="padding-left:20px;">${inpText(st.name, `${path}.name=this.value; update();`, 126)}</td>
       <td class="l" style="padding-left:8px;">${doerCell}</td>
@@ -2694,6 +2729,7 @@ function createAll(){
   criticalTasks.forEach((t,i) => {
     l += listTopRow('crit', i, t, 'Critical', predsSummaryNames('crit',i,t));
     if(t.expanded && hasSub(t)) t.subtasks.forEach((st,si) => { l += listSubRow('crit', i, si, st); });
+    l += milestoneListRowsAfter(i+1);
   });
   l += `<tr style="background:#FAEEDA22;">
     <td></td>
@@ -2714,7 +2750,13 @@ function createAll(){
     const t = fc.tasks[0];
     l += listTopRow('feed', ci, t, 'Feeding', predsSummaryNames('feed',ci,t));
     if(t.expanded && hasSub(t)) t.subtasks.forEach((st,si) => { l += listSubRow('feed', ci, si, st); });
+    l += milestoneListRowsAfter(criticalTasks.length + ci + 1);
   });
+  {
+    let leftoverList = '';
+    milestones.forEach((m,mi) => { if(!placedMilestones.has(mi)) leftoverList += milestoneListRow(mi, m); });
+    l += leftoverList;
+  }
   l += `<tr style="font-weight:600; border-top:2px solid var(--border-strong);">
     <td></td>
     <td class="l">Totals (₹ thousand)</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td>
@@ -3063,13 +3105,35 @@ function reorderFeedingChain(from,to){
   restorePredObjects(snap);
   createAll();
 }
-function dragStartRow(kind,i){ dragSrcKind = kind; dragSrcIndex = i; }
+function dragStartRow(kind,i,si){ dragSrcKind = kind; dragSrcIndex = i; dragSrcSi = (si===undefined) ? null : si; }
 function dragOverRow(e){ e.preventDefault(); }
-function dropRow(kind,i){
-  if(dragSrcKind===kind && dragSrcIndex!==null && dragSrcIndex!==i){
-    if(kind==='crit') reorderCriticalTask(dragSrcIndex, i); else reorderFeedingChain(dragSrcIndex, i);
+function dropRow(kind,i,si){
+  si = (si===undefined) ? null : si;
+  const srcIsSub = dragSrcSi!==null && dragSrcSi!==undefined;
+  const tgtIsSub = si!==null && si!==undefined;
+  const isSamePlace = dragSrcKind===kind && dragSrcIndex===i && dragSrcSi===si;
+  if(!isSamePlace){
+    if(!srcIsSub && !tgtIsSub && dragSrcKind===kind && dragSrcIndex!==null){
+      // exact original behaviour, unchanged: both top-level, same kind — pure reorder.
+      if(kind==='crit') reorderCriticalTask(dragSrcIndex, i); else reorderFeedingChain(dragSrcIndex, i);
+    } else if(!srcIsSub && tgtIsSub){
+      // a phase-level task can't reference a specific sub-task in its own predecessor field
+      // (that field only supports whole-phase # references) — nothing sensible to link here.
+      alert('A phase-level task can only be linked to another whole phase this way. To depend on a specific sub-task, open the sub-task itself and use its own predecessor box (Gantt tab).');
+    } else if(dragSrcKind!==null && dragSrcIndex!==null){
+      // any other combination (a sub-task dragged anywhere, or a cross-kind top-level drop) —
+      // sets up a predecessor link instead of moving anything's position: the dragged task now
+      // starts after the dropped-on task finishes. Uses the same dotted-number addressing the
+      // Predecessor Successor feature already understands.
+      const srcTask = taskFromHandle(dragSrcKind, dragSrcIndex, dragSrcSi);
+      if(srcTask){
+        const tgtAddr = taskNumber(kind, i, si);
+        srcTask.preds = tgtAddr + 'FS';
+        update();
+      }
+    }
   }
-  dragSrcKind = null; dragSrcIndex = null;
+  dragSrcKind = null; dragSrcIndex = null; dragSrcSi = null;
 }
 function snapshotState(){
   return JSON.stringify({meta, lookahead, daily, readiness_, zoomPct, criticalTasks, feedingChains, vendorPayments, milestones});
