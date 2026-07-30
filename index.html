@@ -996,8 +996,12 @@ function schedule(){
     const parent = all[topIdx];
     const st = parent.subtasks[si];
     if(subVisiting.get(key)){
-      // circular reference — break the loop safely, same fallback as the top-level cycle guard
+      // circular reference — break the loop safely for THIS pass (fall back to day 0), and clear
+      // the offending predecessor so the very next recompute (moments away, via the normal
+      // debounced update cycle) resolves cleanly on its own instead of staying stuck at day 0
+      // forever — no manual hunting through the Gantt tab required.
       st.start = 0; st.end = st.duration;
+      if(st.preds){ st.preds = ''; }
       subComputed.set(key, true); subVisiting.set(key, false);
       return;
     }
@@ -1037,6 +1041,7 @@ function schedule(){
       }
     }
     let s = starts.length ? Math.max(...starts) : 0;
+    if(isNaN(s)) s = 0; // safety net — a degenerate circular/reentrant reference should never propagate into a garbage date; fall back to project start instead
     s = Math.max(0, s) + buf;
     st.start = s; st.end = s + st.duration;
     subComputed.set(key, true); subVisiting.set(key, false);
@@ -1046,7 +1051,11 @@ function schedule(){
     const t = all[idx];
     if(visiting[idx]){
       // circular predecessor reference (e.g. task 2 -> task 6 -> task 2) — break the loop safely
+      // for THIS pass, and clear the offending predecessor so the next recompute resolves
+      // cleanly on its own instead of staying pinned to day 0 — same self-healing as the
+      // sub-task version of this guard.
       t.start = 0; t.end = t.duration;
+      if(t.preds){ t.preds = ''; }
       computed[idx] = true; visiting[idx] = false;
       return;
     }
@@ -1081,6 +1090,7 @@ function schedule(){
       });
     }
     let s = starts.length ? Math.max(...starts) : 0;
+    if(isNaN(s)) s = 0; // same safety net as the sub-task version above
     s = Math.max(0, s) + buf;
     t.start = s; t.end = s + t.duration;
     // anchor is done — release the anchor-guard now, before touching sub-tasks, so a sub-task's
