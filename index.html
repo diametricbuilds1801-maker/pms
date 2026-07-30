@@ -1144,14 +1144,16 @@ function setBar(id,left,width,total){
 }
 // hover tooltip on a Gantt bar (and its label) showing planned start/finish — startDay/endDay are
 // in schedule days, converted to real calendar dates via dateAt().
-function setBarTitle(id, startDay, endDay){
+function setBarTitle(id, startDay, endDay, name){
   const el = document.getElementById(id); if(!el) return;
-  el.title = `Planned start: ${fmtD(dateAt(startDay))}\nPlanned finish: ${fmtD(dateAt(endDay))}`;
+  el.title = (name ? name+'\n' : '') + `Planned start: ${fmtD(dateAt(startDay))}\nPlanned finish: ${fmtD(dateAt(endDay))}`;
 }
 function setT(id,html){ const el = document.getElementById(id); if(el) el.innerHTML = html; }
 function shortName(name){
   if(!name) return '';
-  return String(name).trim();
+  let s = String(name).trim();
+  if(s.length > 40) s = s.slice(0,38).trim()+'…';
+  return s;
 }
 // startDay/endDay are the bar's own start/end (in schedule days). The label defaults to sitting
 // just after the bar's end; fixLabelOverlaps() may later flip it to sit before the bar's start
@@ -1430,7 +1432,7 @@ function update(){
     const pc = phaseColor('crit',i);
     setBar('bar-crit-'+i, t.start, t.duration, total);
     setBarTitle('bar-crit-'+i, t.start, t.end);
-    setBarTitle('lbl-crit-'+i, t.start, t.end);
+    setBarTitle('lbl-crit-'+i, t.start, t.end, t.name);
     colorBar('bar-crit-'+i, isDelayed(t), pc.base);
     setProgress('prog-crit-'+i, t.pct, isDelayed(t) ? '#E0AE1A' : pc.base);
     setBarLabel('lbl-crit-'+i, t.start, t.start+t.duration, total, barLabelHtml(t, hasSub(t)));
@@ -1460,7 +1462,7 @@ function update(){
       t.subtasks.forEach((st,si) => {
         setBar(`bar-crit-${i}-s-${si}`, st.start, st.duration, total);
         setBarTitle(`bar-crit-${i}-s-${si}`, st.start, st.end);
-        setBarTitle(`lbl-crit-${i}-s-${si}`, st.start, st.end);
+        setBarTitle(`lbl-crit-${i}-s-${si}`, st.start, st.end, st.name);
         colorBar(`bar-crit-${i}-s-${si}`, isDelayed(st), pc.light);
         setProgress(`prog-crit-${i}-s-${si}`, st.pct, isDelayed(st) ? '#E0AE1A' : pc.light);
         setBarLabel(`lbl-crit-${i}-s-${si}`, st.start, st.start+st.duration, total, barLabelHtml(st));
@@ -1493,7 +1495,7 @@ function update(){
     const pcf = phaseColor('feed',ci);
     setBar('bar-feed-'+ci, Math.max(t.start,0), t.duration, total);
     setBarTitle('bar-feed-'+ci, Math.max(t.start,0), t.end);
-    setBarTitle('lbl-feed-'+ci, Math.max(t.start,0), t.end);
+    setBarTitle('lbl-feed-'+ci, Math.max(t.start,0), t.end, t.name);
     colorBar('bar-feed-'+ci, isDelayed(t), pcf.base);
     setProgress('prog-feed-'+ci, t.pct, isDelayed(t) ? '#E0AE1A' : pcf.base);
     setBarLabel('lbl-feed-'+ci, Math.max(t.start,0), Math.max(t.start,0)+t.duration, total, barLabelHtml(t, hasSub(t)));
@@ -1523,7 +1525,7 @@ function update(){
       t.subtasks.forEach((st,si) => {
         setBar(`bar-feed-${ci}-s-${si}`, Math.max(st.start,0), st.duration, total);
         setBarTitle(`bar-feed-${ci}-s-${si}`, Math.max(st.start,0), st.end);
-        setBarTitle(`lbl-feed-${ci}-s-${si}`, Math.max(st.start,0), st.end);
+        setBarTitle(`lbl-feed-${ci}-s-${si}`, Math.max(st.start,0), st.end, st.name);
         colorBar(`bar-feed-${ci}-s-${si}`, isDelayed(st), pcf.light);
         setProgress(`prog-feed-${ci}-s-${si}`, st.pct, isDelayed(st) ? '#E0AE1A' : pcf.light);
         setBarLabel(`lbl-feed-${ci}-s-${si}`, Math.max(st.start,0), Math.max(st.start,0)+st.duration, total, barLabelHtml(st));
