@@ -504,7 +504,29 @@ let dragSrcSi = null;
 // spanning both critical-chain and feeding-chain tasks); its actual start is the LATEST of every
 // listed constraint. Left blank (or a bare relation with no number, e.g. just "SS") it defaults to
 // the task directly above this one in its own list. See parsePreds()/schedule().
-function newTask(name,duration,plan){ return {name, duration, plan, act:'', adate:'', owner:'', notes:'', shift:'', preds:'', pct:0, infoReady:false, materialReady:false, labourReady:false, link:'', infoLink:'', materialLink:'', labourLink:'', qcLink:'', qcDone:false, vendor:'', taskType:'critical', buffer:0, manualStart:null, subtasks:[], expanded:false}; }
+function newTask(name,duration,plan){ return {name, duration, plan, act:'', adate:'', owner:'', notes:'', shift:'', preds:'', pct:0, infoReady:false, materialReady:false, labourReady:false, link:'', infoLink:'', materialLink:'', labourLink:'', qcLink:'', qcDone:false, vendor:'', taskType:'critical', buffer:0, manualStart:null, origAddr:null, subtasks:[], expanded:false}; }
+// captures a task's CURRENT unified # the very first time it's ever rendered, and never touches
+// it again — this is what lets the # column keep showing "was 1.1" after the task has been
+// dragged somewhere else, without changing how the task is actually addressed internally
+// (predecessor strings, dropdowns, and scheduling all still use the live, current # — only this
+// small tag is frozen). Note: for tasks that already existed before this feature shipped, "first
+// render under this code" is the earliest point their original position could be captured — if
+// they'd already been moved around before that, this tag reflects wherever they were then, not
+// their true original creation spot.
+function ensureOrigAddr(t, curAddr){
+  if(t.origAddr===null || t.origAddr===undefined) t.origAddr = curAddr;
+  return t.origAddr;
+}
+// builds the # column's inner HTML: the live/current number (still the one used everywhere
+// internally), plus a small muted "was X" tag underneath if it's ever been moved from where it
+// was first seen.
+function numberDisplayHtml(t, curAddr){
+  ensureOrigAddr(t, curAddr);
+  if(t.origAddr && String(t.origAddr)!==String(curAddr)){
+    return `${curAddr}<div style="font-size:8px; font-weight:400; color:var(--text-muted); line-height:1.2;" title="Number when first created">was ${escHtml(t.origAddr)}</div>`;
+  }
+  return String(curAddr);
+}
 // ---------------------------------------------------------------------------------------------
 // PROJECT DATA — Residential build, 300 sq yd plot, stilt + 4 floors + mumty + lift,
 // 2,400 sq ft covered per floor. Structure + full turnkey interiors. CCPM, conservative 30% buffers.
@@ -1977,7 +1999,8 @@ function removeVendorRow(i){ vendorPayments.splice(i,1); renderVendorRows(); upd
 // already resolves (top-level critical/feeding tasks only, matching the Task list "#" column).
 function milestoneDay(m){
   const target = taskByNumber(m.predNum);
-  return target ? target.t.end : null;
+  if(!target) return null;
+  return target.t.end + (Number(m.duration)||0);
 }
 // gives a milestone the SAME kind of unified # as a real task, continuing right on from wherever
 // it sits — if its predecessor phase already has 4 sub-tasks (1.1..1.4), the milestone right after
@@ -2036,7 +2059,7 @@ function patchMilestones(total){
     }
   });
 }
-function addMilestone(){ milestones.push({name:'New milestone', predNum:'', owner:'', pct:0}); renderMilestoneRows(); createAll(); }
+function addMilestone(){ milestones.push({name:'New milestone', predNum:'', owner:'', pct:0, duration:0, adate:''}); renderMilestoneRows(); createAll(); }
 function removeMilestone(mi){ milestones.splice(mi,1); renderMilestoneRows(); createAll(); }
 // one Gantt row per milestone — a diamond marker at a single point in time (no bar/duration),
 // placed below the feeding chains, same sticky-left/sticky-right row layout as every other row.
@@ -2045,7 +2068,7 @@ function removeMilestone(mi){ milestones.splice(mi,1); renderMilestoneRows(); cr
 // blank. Mirrors ganttMilestoneRow's positioning logic (interleaved right after its predecessor).
 function milestoneListRow(mi, m){
   const target = taskByNumber(m.predNum);
-  const day = target ? target.t.end : null;
+  const day = milestoneDay(m);
   const dateTxt = day!==null ? fmtD(dateAt(day)) : '—';
   const doerCell = `<input type="text" value="${String(m.owner||'').replace(/"/g,'&quot;')}" oninput="milestones[${mi}].owner=this.value; scheduleAutoSync();" placeholder="Doer" style="width:120px; font-size:11.5px; height:24px;">`;
   return `<tr style="background:rgba(31,127,174,0.06);">
@@ -2057,11 +2080,11 @@ function milestoneListRow(mi, m){
     <td></td>
     <td class="l"></td>
     <td></td>
-    <td><input type="number" value="0" disabled title="Milestones have no duration — the date comes from the predecessor task" style="width:40px; flex-shrink:0; font-size:11.5px; height:24px; opacity:0.5;"></td>
+    <td>${inpDur(m.duration||0, `milestones[${mi}].duration=Math.max(0,Number(this.value)||0); update();`, 40)}</td>
     <td>${inpPct(m.pct, `milestones[${mi}]`, 40)}%</td>
     <td style="color:var(--text-secondary);">${dateTxt}</td>
     <td style="color:var(--text-secondary);">${dateTxt}</td>
-    <td class="l"></td>
+    <td class="l">${inpDate(m.adate||'', `milestones[${mi}].adate=this.value; update();`, 116)}</td>
     <td></td>
     <td class="col-budget"></td><td class="col-budget"></td><td class="col-budget"></td>
     <td class="l"></td><td class="l"></td>
@@ -2284,7 +2307,7 @@ function ganttTopRow(kind, i, t){
   const pc = phaseColor(kind,i);
   return `<div class="grow">
     <div class="gsticky-l" style="border-left:4px solid ${pc.base};">
-      <span style="font-size:10px; font-weight:700; color:var(--gold); width:22px; text-align:right; flex-shrink:0;" title="Task #${taskNumber(kind,i)}">${taskNumber(kind,i)}</span>
+      <span style="font-size:10px; font-weight:700; color:var(--gold); width:26px; text-align:right; flex-shrink:0;" title="Task #${taskNumber(kind,i)}">${numberDisplayHtml(t, taskNumber(kind,i))}</span>
       ${chev}
       ${inpTextName(t.name, `${path}.name=this.value; ${sub?'':'update();'}`, sub?165:188, sub)}
       ${badge}
@@ -2324,7 +2347,7 @@ function ganttSubRow(kind, i, si, st){
     : '';
   return `<div class="grow sub">
     <div class="gsticky-l" style="border-left:4px solid ${pc.light};">
-      <span style="font-size:9.5px; font-weight:700; color:var(--gold); width:22px; text-align:right; flex-shrink:0;" title="Task #${taskNumber(kind,i,si)}">${taskNumber(kind,i,si)}</span>
+      <span style="font-size:9.5px; font-weight:700; color:var(--gold); width:26px; text-align:right; flex-shrink:0;" title="Task #${taskNumber(kind,i,si)}">${numberDisplayHtml(st, taskNumber(kind,i,si))}</span>
       <span class="chev"></span>
       ${inpText(st.name, `${path}.name=this.value;`, 130)}
       ${inpDur(st.duration, `${path}.duration=Math.max(1,Number(this.value)||1); update();`, 36)}
@@ -2675,7 +2698,7 @@ function createAll(){
     const moveFn = kind==='crit' ? 'reorderCriticalTask' : 'reorderFeedingChain';
     const numCell = `<div style="display:flex; align-items:center; gap:2px;">
         <span class="drag-handle" title="Drag to reorder" style="cursor:grab; color:var(--text-muted); font-size:13px; line-height:1;"><i class="ti ti-grip-vertical"></i></span>
-        <span>${taskNumber(kind,i)}</span>
+        <span>${numberDisplayHtml(t, taskNumber(kind,i))}</span>
         <span style="display:flex; flex-direction:column; margin-left:2px;">
           <button class="iconbtn" style="padding:0; width:14px; height:11px; line-height:9px; opacity:${i===0?'0.25':'1'};" onclick="${moveFn}(${i},${i-1})" title="Move task up" ${i===0?'disabled':''}><i class="ti ti-chevron-up" style="font-size:10px;"></i></button>
           <button class="iconbtn" style="padding:0; width:14px; height:11px; line-height:9px; opacity:${i===arrLen-1?'0.25':'1'};" onclick="${moveFn}(${i},${i+1})" title="Move task down" ${i===arrLen-1?'disabled':''}><i class="ti ti-chevron-down" style="font-size:10px;"></i></button>
@@ -2716,7 +2739,7 @@ function createAll(){
       ? inpBud(st.buffer||0, `${path}.buffer=this.value===''?0:(Number(this.value)||0); update();`, 50)
       : `<span style="color:var(--text-muted);">—</span>`;
     return `<tr draggable="true" ondragstart="dragStartRow('${kind}',${i},${si},event)" ondrag="updateDragGhost(event)" ondragend="endDragGhost()" ondragover="dragOverRow(event)" ondrop="dropRow('${kind}',${i},${si})" style="background:rgba(176,141,62,0.04);">
-      <td style="color:var(--gold); font-weight:600; font-size:11px;">${taskNumber(kind,i,si)}</td>
+      <td style="color:var(--gold); font-weight:600; font-size:11px;">${numberDisplayHtml(st, taskNumber(kind,i,si))}</td>
       <td class="l" style="padding-left:20px;">${inpText(st.name, `${path}.name=this.value; update();`, 126)}</td>
       <td class="l" style="padding-left:8px;">${doerCell}</td>
       <td class="l"><span style="font-size:10px; color:var(--text-muted);">sub-task</span></td>
