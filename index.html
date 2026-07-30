@@ -381,7 +381,7 @@
     <p style="font-size:12px; color:var(--text-secondary); margin:0 0 10px; max-width:900px;">A milestone is a zero-duration marker (no duration of its own) placed on a specific date — it doesn't get typed in directly. Instead, pick which task it follows (its <b>predecessor</b>); the milestone's date is automatically set to that task's planned finish date, and updates on its own whenever that task's schedule shifts. It shows up on the Gantt chart as a small diamond marker alongside the tasks.</p>
     <table style="border-collapse:collapse; width:100%; max-width:900px;">
       <thead>
-        <tr><th class="l">Milestone name</th><th class="l">Predecessor task</th><th>Date</th><th></th></tr>
+        <tr><th>#</th><th class="l">Milestone name</th><th class="l">Predecessor task</th><th>Date</th><th></th></tr>
       </thead>
       <tbody id="mrows"></tbody>
     </table>
@@ -1119,9 +1119,7 @@ function setBarTitle(id, startDay, endDay){
 function setT(id,html){ const el = document.getElementById(id); if(el) el.innerHTML = html; }
 function shortName(name){
   if(!name) return '';
-  let s = String(name).split(' — ')[0].split(' (')[0].trim();
-  if(s.length > 24) s = s.slice(0,22).trim()+'…';
-  return s;
+  return String(name).trim();
 }
 // startDay/endDay are the bar's own start/end (in schedule days). The label defaults to sitting
 // just after the bar's end; fixLabelOverlaps() may later flip it to sit before the bar's start
@@ -1981,14 +1979,24 @@ function milestoneDay(m){
   const target = taskByNumber(m.predNum);
   return target ? target.t.end : null;
 }
+// gives a milestone the SAME kind of unified # as a real task, continuing right on from wherever
+// it sits — if its predecessor phase already has 4 sub-tasks (1.1..1.4), the milestone right after
+// it becomes 1.5, exactly as if it were the next item in that phase's own numbering.
+function milestoneAddressLabel(m){
+  const target = taskByNumber(m.predNum);
+  if(!target) return '◆';
+  const subCount = hasSub(target.t) ? target.t.subtasks.length : 0;
+  return taskNumber(target.kind, target.i, subCount);
+}
 function milestoneRowHtml(m, mi){
   const opts = allTopLevelTasks().map((t,idx) => {
     const num = idx+1;
     return `<option value="${num}" ${String(m.predNum)===String(num)?'selected':''}>${num}. ${escHtml(shortName(t.name))}</option>`;
   }).join('');
   return `<tr>
+    <td style="color:#1F7FAE; font-weight:700;">${milestoneAddressLabel(m)}</td>
     <td class="l">${inpText(m.name, `milestones[${mi}].name=this.value;`, 220)}</td>
-    <td class="l"><select onchange="milestones[${mi}].predNum=this.value; update();" style="width:220px; font-size:11.5px; height:26px;"><option value="">— choose predecessor task —</option>${opts}</select></td>
+    <td class="l"><select onchange="milestones[${mi}].predNum=this.value; renderMilestoneRows(); update();" style="width:220px; font-size:11.5px; height:26px;"><option value="">— choose predecessor task —</option>${opts}</select></td>
     <td id="mdate-${mi}" style="color:var(--text-secondary);"></td>
     <td>${iconBtn('trash', `removeMilestone(${mi})`, 'Remove')}</td>
   </tr>`;
@@ -2028,7 +2036,7 @@ function patchMilestones(total){
     }
   });
 }
-function addMilestone(){ milestones.push({name:'New milestone', predNum:''}); renderMilestoneRows(); createAll(); }
+function addMilestone(){ milestones.push({name:'New milestone', predNum:'', owner:'', pct:0}); renderMilestoneRows(); createAll(); }
 function removeMilestone(mi){ milestones.splice(mi,1); renderMilestoneRows(); createAll(); }
 // one Gantt row per milestone — a diamond marker at a single point in time (no bar/duration),
 // placed below the feeding chains, same sticky-left/sticky-right row layout as every other row.
@@ -2039,17 +2047,18 @@ function milestoneListRow(mi, m){
   const target = taskByNumber(m.predNum);
   const day = target ? target.t.end : null;
   const dateTxt = day!==null ? fmtD(dateAt(day)) : '—';
+  const doerCell = `<input type="text" value="${String(m.owner||'').replace(/"/g,'&quot;')}" oninput="milestones[${mi}].owner=this.value; scheduleAutoSync();" placeholder="Doer" style="width:120px; font-size:11.5px; height:24px;">`;
   return `<tr style="background:rgba(31,127,174,0.06);">
-    <td style="color:#1F7FAE; font-weight:700; font-size:13px;">◆</td>
+    <td style="color:#1F7FAE; font-weight:700; font-size:11px;">${milestoneAddressLabel(m)}</td>
     <td class="l">${inpText(m.name, `milestones[${mi}].name=this.value;`, 150)}</td>
-    <td class="l"></td>
+    <td class="l">${doerCell}</td>
     <td class="l"><span style="color:#1F7FAE; font-weight:600; font-size:11px;">Milestone</span></td>
     <td class="l" style="color:var(--text-muted); font-size:11px;">${target ? escHtml(target.t.name) : '<span style="color:var(--red);">no predecessor set</span>'}</td>
     <td></td>
     <td class="l"></td>
     <td></td>
-    <td style="color:var(--text-muted);">0</td>
-    <td></td>
+    <td><input type="number" value="0" disabled title="Milestones have no duration — the date comes from the predecessor task" style="width:40px; flex-shrink:0; font-size:11.5px; height:24px; opacity:0.5;"></td>
+    <td>${inpPct(m.pct, `milestones[${mi}]`, 40)}%</td>
     <td style="color:var(--text-secondary);">${dateTxt}</td>
     <td style="color:var(--text-secondary);">${dateTxt}</td>
     <td class="l"></td>
@@ -2069,7 +2078,8 @@ function milestoneListRowsAfter(num){
 function ganttMilestoneRow(mi, m){
   return `<div class="grow" style="background:rgba(31,127,174,0.16); border-radius:4px; outline:1px solid rgba(31,127,174,0.25); outline-offset:-1px;">
     <div class="gsticky-l" style="border-left:4px solid #1F7FAE; background:rgba(31,127,174,0.06);">
-      <span style="font-size:15px; width:22px; text-align:center; flex-shrink:0; color:#1F7FAE;">◆</span>
+      <span style="font-size:10px; font-weight:700; color:#1F7FAE; width:22px; text-align:right; flex-shrink:0;">${milestoneAddressLabel(m)}</span>
+      <span style="font-size:15px; width:16px; text-align:center; flex-shrink:0; color:#1F7FAE;">◆</span>
       <span class="chev"></span>
       ${inpText(m.name, `milestones[${mi}].name=this.value;`, 188)}
     </div>
@@ -2088,7 +2098,9 @@ function ganttMilestoneRow(mi, m){
       <div class="todayline"></div>
     </div>
     <div class="gsticky-r" style="background:rgba(31,127,174,0.06);">
+      <input type="text" value="${String(m.owner||'').replace(/"/g,'&quot;')}" oninput="milestones[${mi}].owner=this.value; scheduleAutoSync();" placeholder="Doer" style="width:90px; font-size:9.5px; height:22px;">
       <span style="font-size:9.5px; color:var(--text-muted); flex-shrink:0;">milestone</span>
+      ${inpPct(m.pct, `milestones[${mi}]`, 40)}%
       ${iconBtn('trash', `removeMilestone(${mi})`, 'Remove milestone')}
     </div>
   </div>`;
@@ -2669,7 +2681,7 @@ function createAll(){
           <button class="iconbtn" style="padding:0; width:14px; height:11px; line-height:9px; opacity:${i===arrLen-1?'0.25':'1'};" onclick="${moveFn}(${i},${i+1})" title="Move task down" ${i===arrLen-1?'disabled':''}><i class="ti ti-chevron-down" style="font-size:10px;"></i></button>
         </span>
       </div>`;
-    return `<tr draggable="true" ondragstart="dragStartRow('${kind}',${i})" ondragover="dragOverRow(event)" ondrop="dropRow('${kind}',${i})">
+    return `<tr draggable="true" ondragstart="dragStartRow('${kind}',${i},null,event)" ondrag="updateDragGhost(event)" ondragend="endDragGhost()" ondragover="dragOverRow(event)" ondrop="dropRow('${kind}',${i})">
       <td style="color:var(--gold); font-weight:700;">${numCell}</td>
       <td class="l">${nameCell}</td>
       <td class="l" style="padding-left:8px;">${doerCell}</td>
@@ -2703,7 +2715,7 @@ function createAll(){
     const bufCell = kind==='feed'
       ? inpBud(st.buffer||0, `${path}.buffer=this.value===''?0:(Number(this.value)||0); update();`, 50)
       : `<span style="color:var(--text-muted);">—</span>`;
-    return `<tr draggable="true" ondragstart="dragStartRow('${kind}',${i},${si})" ondragover="dragOverRow(event)" ondrop="dropRow('${kind}',${i},${si})" style="background:rgba(176,141,62,0.04);">
+    return `<tr draggable="true" ondragstart="dragStartRow('${kind}',${i},${si},event)" ondrag="updateDragGhost(event)" ondragend="endDragGhost()" ondragover="dragOverRow(event)" ondrop="dropRow('${kind}',${i},${si})" style="background:rgba(176,141,62,0.04);">
       <td style="color:var(--gold); font-weight:600; font-size:11px;">${taskNumber(kind,i,si)}</td>
       <td class="l" style="padding-left:20px;">${inpText(st.name, `${path}.name=this.value; update();`, 126)}</td>
       <td class="l" style="padding-left:8px;">${doerCell}</td>
@@ -3229,7 +3241,36 @@ function reorderFeedingChain(from,to){
   restorePredObjects(snap);
   createAll();
 }
-function dragStartRow(kind,i,si){ dragSrcKind = kind; dragSrcIndex = i; dragSrcSi = (si===undefined) ? null : si; }
+// floating badge that follows the cursor during a Task-list row drag, showing exactly which
+// numbered task is being moved — replaces the browser's own default drag-image (which only shows
+// whatever happens to be visible/unclipped at that scroll position, and can end up cutting off
+// the # column) with something that always reads clearly regardless of scroll position or zoom.
+let dragGhostEl = null;
+const TRANSPARENT_DRAG_IMG = (function(){ const img = new Image(); img.src = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBTAA7'; return img; })();
+function dragStartRow(kind,i,si,ev){
+  dragSrcKind = kind; dragSrcIndex = i; dragSrcSi = (si===undefined) ? null : si;
+  const t = taskFromHandle(kind, i, dragSrcSi);
+  const label = taskNumber(kind, i, dragSrcSi) + (t ? ' · ' + shortName(t.name) : '');
+  if(ev && ev.dataTransfer){
+    try { ev.dataTransfer.setDragImage(TRANSPARENT_DRAG_IMG, 0, 0); } catch(e){}
+  }
+  if(!dragGhostEl){
+    dragGhostEl = document.createElement('div');
+    dragGhostEl.style.cssText = 'position:fixed; z-index:9999; pointer-events:none; background:var(--gold); color:#fff; font-size:11.5px; font-weight:700; padding:4px 10px; border-radius:6px; box-shadow:0 2px 8px rgba(0,0,0,0.35); white-space:nowrap;';
+    document.body.appendChild(dragGhostEl);
+  }
+  dragGhostEl.textContent = label;
+  if(ev){ dragGhostEl.style.left = (ev.clientX+14)+'px'; dragGhostEl.style.top = (ev.clientY+14)+'px'; }
+}
+function updateDragGhost(ev){
+  if(dragGhostEl && ev && (ev.clientX || ev.clientY)){
+    dragGhostEl.style.left = (ev.clientX+14)+'px';
+    dragGhostEl.style.top = (ev.clientY+14)+'px';
+  }
+}
+function endDragGhost(){
+  if(dragGhostEl){ dragGhostEl.remove(); dragGhostEl = null; }
+}
 function dragOverRow(e){ e.preventDefault(); }
 function dropRow(kind,i,si){
   si = (si===undefined) ? null : si;
