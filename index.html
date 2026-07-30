@@ -1218,6 +1218,14 @@ function allLeafTasks(){
   feedingChains.forEach(fc => { const t = fc.tasks[0]; if(hasSub(t)) out = out.concat(t.subtasks); else out.push(t); });
   return out;
 }
+// critical-chain leaf tasks only (excludes feeding chains) — used by the Summary tab's "Overall
+// work complete" card, since that's meant to reflect progress on the chain that actually drives
+// the project's completion date, not side-work that has its own separate buffers.
+function allCriticalLeafTasks(){
+  let out = [];
+  criticalTasks.forEach(t => { if(hasSub(t)) out = out.concat(t.subtasks); else out.push(t); });
+  return out;
+}
 
 function pxPerDay(){ return BASE_PXW * zoomPct/100; }
 function setZoom(delta){ zoomPct = Math.max(50, Math.min(400, zoomPct+delta)); applyZoomWidths(); }
@@ -2542,15 +2550,31 @@ function renderWorkloadWidget(){
 // at a glance ("how much of the work is done"), separate from the more detailed Dashboard widgets
 // further down the page.
 function renderOverallProgress(){
-  const m = healthMetrics();
-  const pct = Math.round(m.weightedPct);
+  const leaves = allCriticalLeafTasks();
+  const totalDur = leaves.reduce((s,t)=>s+(Number(t.duration)||0),0);
+  const weightedPct = totalDur>0 ? leaves.reduce((s,t)=>s+(Number(t.pct)||0)*(Number(t.duration)||0),0)/totalDur : 0;
+  const doneCount = leaves.filter(t=>overallStatus(t)==='done').length;
+  const overdueCount = leaves.filter(t=>overallStatus(t)==='overdue').length;
+  const pct = Math.round(weightedPct);
   const color = pct>=100 ? 'var(--green)' : (pct>=50 ? 'var(--today)' : 'var(--amber)');
+
+  const {chainSum, completionBuffer} = schedule();
+  const bufDays = Math.round(completionBuffer);
+  const consumed = criticalTasks.reduce((s,t)=>{ const d = delayDays(t); return s+(d>0?d:0); },0);
+  const bufPct = bufDays>0 ? Math.round(consumed/bufDays*100) : 0;
+  const bufColor = bufPct<34 ? 'var(--green)' : (bufPct<67 ? 'var(--amber)' : 'var(--red)');
+
   return `
     <div style="font-size:32px; font-weight:700; color:${color}; line-height:1; margin-bottom:10px;">${pct}%</div>
     <div style="height:14px; background:var(--surface-2); border-radius:7px; overflow:hidden; margin-bottom:8px;">
       <div style="height:100%; width:${Math.min(100,pct)}%; background:${color}; border-radius:7px;"></div>
     </div>
-    <div style="font-size:11.5px; color:var(--text-secondary);">${m.doneCount} of ${m.leavesLen} tasks done${m.overdueCount ? ` · <span style="color:var(--red); font-weight:600;">${m.overdueCount} overdue</span>` : ''}</div>`;
+    <div style="font-size:11.5px; color:var(--text-secondary); margin-bottom:14px;">${doneCount} of ${leaves.length} critical task(s) done${overdueCount ? ` · <span style="color:var(--red); font-weight:600;">${overdueCount} overdue</span>` : ''}</div>
+    <p style="font-size:11px; color:var(--text-secondary); margin:0 0 4px; font-weight:600;">Completion buffer consumed</p>
+    <div style="height:14px; background:var(--surface-2); border-radius:7px; overflow:hidden; margin-bottom:6px;">
+      <div style="height:100%; width:${Math.min(100,bufPct)}%; background:${bufColor}; border-radius:7px;"></div>
+    </div>
+    <div style="font-size:11.5px; color:var(--text-secondary);">${consumed} of ${bufDays} day(s) · <span style="color:${bufColor}; font-weight:600;">${bufPct}%</span></div>`;
 }
 function renderStats(){
   setT('overall-progress-card', renderOverallProgress());
