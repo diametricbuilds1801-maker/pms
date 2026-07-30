@@ -2891,11 +2891,37 @@ async function fetchJsonRetry_(url, tries){
   }
   throw lastErr;
 }
+// Loads a project's rawState as MANY SMALL requests (one per already-chunked _data row) instead
+// of one single big ?action=load fetch. Some mobile networks/carrier proxies come back with a
+// truncated response for a single large fetch() body even though the exact same URL loads fine
+// as a plain browser navigation (address bar) — keeping every individual response small sidesteps
+// whatever is truncating the big one, without changing how the data is stored on the Sheet side.
+// Returns {ok, rawState} in the same shape the old ?action=load response had, so every caller
+// below only needed a one-line swap.
+async function loadRawStateChunked_(name){
+  const metaUrl = syncUrl + (syncUrl.includes('?') ? '&' : '?') + 'action=load_meta&project=' + encodeURIComponent(name) + '&_ts=' + Date.now();
+  const meta_ = await fetchJsonRetry_(metaUrl);
+  if(!meta_ || !meta_.ok) return meta_ || {ok:false, error:'Could not reach the server'};
+  const chunkCount = Number(meta_.chunkCount)||0;
+  if(chunkCount<1) return {ok:true, rawState:''};
+  const parts = new Array(chunkCount);
+  for(let i=1; i<=chunkCount; i++){
+    const cUrl = syncUrl + (syncUrl.includes('?') ? '&' : '?') + 'action=load_chunk&project=' + encodeURIComponent(name) + '&index=' + i + '&_ts=' + Date.now();
+    const cData = await fetchJsonRetry_(cUrl);
+    if(!cData || !cData.ok) return {ok:false, error:'Could not load part '+i+' of '+chunkCount+' — '+(cData&&cData.error?cData.error:'unknown error')};
+    parts[i-1] = cData.chunk || '';
+  }
+  const joined = parts.join('');
+  const expectedLen = Number(meta_.totalLength)||0;
+  if(expectedLen>0 && joined.length!==expectedLen){
+    return {ok:false, error:'Data came back incomplete ('+joined.length+' of '+expectedLen+' characters) — try again, or check your connection.'};
+  }
+  return {ok:true, rawState: joined};
+}
 async function autoPullLatest(){
   if(!syncUrl || !meta.name) return;
   try {
-    const url = syncUrl + (syncUrl.includes('?') ? '&' : '?') + 'action=load&project=' + encodeURIComponent(meta.name) + '&_ts=' + Date.now();
-    const data = await fetchJsonRetry_(url);
+    const data = await loadRawStateChunked_(meta.name);
     if(data && data.ok && data.rawState){
       const s = JSON.parse(data.rawState);
       suppressSnapshot = true;
@@ -3718,8 +3744,7 @@ async function onProjectPicked(name){
   }
   if(statusEl){ statusEl.textContent = 'Loading ' + name + '…'; statusEl.style.color = 'var(--text-secondary)'; }
   try {
-    const url = syncUrl + (syncUrl.includes('?') ? '&' : '?') + 'action=load&project=' + encodeURIComponent(name) + '&_ts=' + Date.now();
-    const data = await fetchJsonRetry_(url);
+    const data = await loadRawStateChunked_(name);
     if(!data || !data.ok){
       const errMsg = 'Could not load "'+name+'": ' + (data&&data.error?data.error:'unknown error') + '\n\nYou are STILL on "'+(meta.name||'(untitled)')+'" — nothing changed. If this keeps happening, redeploy the Apps Script as a new version (Deploy > Manage deployments > edit > New version > Deploy).';
       if(statusEl){ statusEl.textContent = 'Load failed — see popup'; statusEl.style.color='var(--red)'; }
@@ -3732,10 +3757,7 @@ async function onProjectPicked(name){
       // with real data), OR a transient read glitch on a Sheet that actually HAS real data. Retry
       // the load once before assuming "empty" — this alone fixes most false-empty cases.
       let retryData = null;
-      // a fresh timestamp here (not the same `url`) matters — reusing the exact same URL string
-      // for the retry risks hitting a cached response for that exact request again.
-      const retryUrl = syncUrl + (syncUrl.includes('?') ? '&' : '?') + 'action=load&project=' + encodeURIComponent(name) + '&_ts=' + Date.now();
-      try { retryData = await fetchJsonRetry_(retryUrl); } catch(retryErr){ /* fall through to blank-template handling below */ }
+      try { retryData = await loadRawStateChunked_(name); } catch(retryErr){ /* fall through to blank-template handling below */ }
       if(retryData && retryData.ok && retryData.rawState){
         const s2 = JSON.parse(retryData.rawState);
         suppressSnapshot = true;
