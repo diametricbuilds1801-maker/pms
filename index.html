@@ -2037,6 +2037,9 @@ function patchMilestones(total){
   milestones.forEach((m,mi) => {
     const day = milestoneDay(m);
     setT('mdate-'+mi, day!==null ? fmtD(dateAt(day)) : '—');
+    const dateTxt = day!==null ? fmtD(dateAt(day)) : '—';
+    setT('mlpd-'+mi, dateTxt);
+    setT('mlpf-'+mi, dateTxt);
     const markerEl = document.getElementById('ms-marker-'+mi);
     const lblEl = document.getElementById('ms-lbl-'+mi);
     const hlEl = document.getElementById('ms-highlight-'+mi);
@@ -2082,8 +2085,8 @@ function milestoneListRow(mi, m){
     <td></td>
     <td>${inpDur(m.duration||0, `milestones[${mi}].duration=Math.max(0,Number(this.value)||0); update();`, 40)}</td>
     <td>${inpPct(m.pct, `milestones[${mi}]`, 40)}%</td>
-    <td style="color:var(--text-secondary);">${dateTxt}</td>
-    <td style="color:var(--text-secondary);">${dateTxt}</td>
+    <td style="color:var(--text-secondary);" id="mlpd-${mi}">${dateTxt}</td>
+    <td style="color:var(--text-secondary);" id="mlpf-${mi}">${dateTxt}</td>
     <td class="l">${inpDate(m.adate||'', `milestones[${mi}].adate=this.value; update();`, 116)}</td>
     <td></td>
     <td class="col-budget"></td><td class="col-budget"></td><td class="col-budget"></td>
