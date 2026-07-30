@@ -2961,6 +2961,130 @@ function addCriticalTask(){ criticalTasks.push(newTask('New task', 5, 0)); creat
 // directly above, positionally") are recorded as null and left completely untouched by restore —
 // they should keep following whatever ends up above after the mutation, not stay pinned to an
 // old object.
+// ---- Generalized predecessor remapping (top-level AND sub-task) — used by moveTaskTo() below ----
+// Every top-level task or sub-task in the whole project, with enough info to compute its CURRENT
+// unified address (taskNumber-compatible) at any point — used both to build the pre-move capture
+// map and to resolve post-move addresses when restoring it.
+function allAddressableNodes(){
+  const out = [];
+  criticalTasks.forEach((t,i) => {
+    out.push({obj:t, isSub:false, kind:'crit', topIdxLocal:i, si:null});
+    if(hasSub(t)) t.subtasks.forEach((st,si) => out.push({obj:st, isSub:true, kind:'crit', topIdxLocal:i, si}));
+  });
+  feedingChains.forEach((fc,ci) => {
+    const t = fc.tasks[0];
+    out.push({obj:t, isSub:false, kind:'feed', topIdxLocal:ci, si:null});
+    if(hasSub(t)) t.subtasks.forEach((st,si) => out.push({obj:st, isSub:true, kind:'feed', topIdxLocal:ci, si}));
+  });
+  return out;
+}
+// resolves a preds reference string ("2" or "1.3") to the actual task/sub-task OBJECT it currently
+// points at — a read-only counterpart to schedule()'s resolveSubRef(), used only for remapping.
+function resolveAddressToObject(ref){
+  const str = String(ref);
+  const all = allTopLevelTasks();
+  if(str.indexOf('.')>=0){
+    const parts = str.split('.');
+    const topIdx = parseInt(parts[0],10)-1;
+    const si = parseInt(parts[1],10)-1;
+    const t = all[topIdx];
+    if(!t || !hasSub(t) || si<0 || si>=t.subtasks.length) return null;
+    return t.subtasks[si];
+  }
+  const topIdx = parseInt(str,10)-1;
+  return all[topIdx] || null;
+}
+// snapshots every addressable node's resolved predecessor OBJECT references (by identity) before
+// a structural move — mirrors capturePredObjects()/restorePredObjects() above but covers sub-tasks
+// too (via the dotted-number-aware parseSubPreds parser, which is a safe superset for reading any
+// existing top-level preds string as well). Blank/default preds are recorded as null and left
+// completely alone by restore — they should keep following whatever ends up adjacent after the
+// move, not stay pinned to a stale position.
+function captureAllPredRefs(){
+  const nodes = allAddressableNodes();
+  const map = new Map();
+  nodes.forEach(n => {
+    const raw = n.obj.preds;
+    const parsed = parseSubPreds(raw);
+    if(!parsed.length){ map.set(n.obj, null); return; }
+    const refs = parsed.map(p => {
+      if(!p.ref) return null;
+      const refObj = resolveAddressToObject(p.ref);
+      return refObj ? {obj:refObj, rel:p.rel} : null;
+    }).filter(Boolean);
+    map.set(n.obj, refs);
+  });
+  return map;
+}
+// rebuilds every node's preds string from the objects captured above, using each referenced
+// object's CURRENT unified address (top-level tasks get a plain #, sub-tasks get a dotted #) now
+// that the move has happened. A reference whose object was removed entirely is silently dropped.
+function restoreAllPredRefs(map){
+  const nodes = allAddressableNodes();
+  map.forEach((refs, obj) => {
+    if(refs===null) return;
+    if(!nodes.find(n => n.obj===obj)) return;
+    const parts = refs.map(r => {
+      const node = nodes.find(n => n.obj===r.obj);
+      if(!node) return null;
+      const addr = node.isSub ? taskNumber(node.kind, node.topIdxLocal, node.si) : taskNumber(node.kind, node.topIdxLocal);
+      return addr + r.rel;
+    }).filter(Boolean);
+    obj.preds = parts.join(',');
+  });
+}
+// Physically moves a task/sub-task to sit right after (or, for an empty phase, inside) another
+// task/sub-task, wherever it's dropped — reparenting between phases, promoting a sub-task to its
+// own top-level task, demoting a top-level task into a phase's sub-task list, or converting
+// between critical/feeding in the process, all in one operation. Every other node's predecessor
+// references are automatically remapped by object identity (see above) so nothing silently starts
+// pointing at the wrong task after the move. The moved task's OWN preds is reset to blank, since
+// whatever it referenced before likely no longer makes sense in its new position — it falls back
+// to "the task directly above it" wherever it lands, same default every other task uses.
+function moveTaskTo(srcKind, srcI, srcSi, tgtKind, tgtI, tgtSi){
+  const srcIsSub = srcSi!==null && srcSi!==undefined;
+  const tgtIsSub = tgtSi!==null && tgtSi!==undefined;
+  const srcTask = taskFromHandle(srcKind, srcI, srcSi);
+  const tgtTask = taskFromHandle(tgtKind, tgtI, tgtSi);
+  if(!srcTask || !tgtTask || srcTask===tgtTask) return;
+  if(!srcIsSub && hasSub(srcTask) && tgtIsSub){
+    alert('"'+srcTask.name+'" is itself a phase with its own sub-tasks, so it can\'t be dropped inside another phase\'s task list — only a single task or sub-task can move that way. Expand it and move its sub-tasks individually if needed.');
+    return;
+  }
+  if(!srcIsSub && srcKind==='crit' && criticalTasks.length<=1){
+    alert('At least one critical task must remain outside any phase.');
+    return;
+  }
+  const predMap = captureAllPredRefs();
+  if(srcIsSub){
+    const parent = srcKind==='crit' ? criticalTasks[srcI] : feedingChains[srcI].tasks[0];
+    parent.subtasks.splice(srcSi,1);
+  } else if(srcKind==='crit'){
+    criticalTasks.splice(srcI,1);
+  } else {
+    feedingChains.splice(srcI,1);
+  }
+  srcTask.preds = '';
+  if(tgtIsSub){
+    let parentPhase = null;
+    allTopLevelTasks().forEach(t => { if(hasSub(t) && t.subtasks.indexOf(tgtTask)>=0) parentPhase = t; });
+    if(parentPhase){
+      const idx = parentPhase.subtasks.indexOf(tgtTask);
+      parentPhase.subtasks.splice(idx+1, 0, srcTask);
+      parentPhase.expanded = true;
+    }
+  } else if(hasSub(tgtTask)){
+    tgtTask.subtasks.unshift(srcTask);
+    tgtTask.expanded = true;
+  } else if(criticalTasks.indexOf(tgtTask)>=0){
+    criticalTasks.splice(criticalTasks.indexOf(tgtTask)+1, 0, srcTask);
+  } else {
+    const fcIdx = feedingChains.findIndex(fc => fc.tasks[0]===tgtTask);
+    if(fcIdx>=0) feedingChains.splice(fcIdx+1, 0, {tasks:[srcTask]});
+  }
+  restoreAllPredRefs(predMap);
+  createAll();
+}
 function capturePredObjects(){
   const all = allTopLevelTasks();
   const map = new Map();
@@ -3109,29 +3233,9 @@ function dragStartRow(kind,i,si){ dragSrcKind = kind; dragSrcIndex = i; dragSrcS
 function dragOverRow(e){ e.preventDefault(); }
 function dropRow(kind,i,si){
   si = (si===undefined) ? null : si;
-  const srcIsSub = dragSrcSi!==null && dragSrcSi!==undefined;
-  const tgtIsSub = si!==null && si!==undefined;
   const isSamePlace = dragSrcKind===kind && dragSrcIndex===i && dragSrcSi===si;
-  if(!isSamePlace){
-    if(!srcIsSub && !tgtIsSub && dragSrcKind===kind && dragSrcIndex!==null){
-      // exact original behaviour, unchanged: both top-level, same kind — pure reorder.
-      if(kind==='crit') reorderCriticalTask(dragSrcIndex, i); else reorderFeedingChain(dragSrcIndex, i);
-    } else if(!srcIsSub && tgtIsSub){
-      // a phase-level task can't reference a specific sub-task in its own predecessor field
-      // (that field only supports whole-phase # references) — nothing sensible to link here.
-      alert('A phase-level task can only be linked to another whole phase this way. To depend on a specific sub-task, open the sub-task itself and use its own predecessor box (Gantt tab).');
-    } else if(dragSrcKind!==null && dragSrcIndex!==null){
-      // any other combination (a sub-task dragged anywhere, or a cross-kind top-level drop) —
-      // sets up a predecessor link instead of moving anything's position: the dragged task now
-      // starts after the dropped-on task finishes. Uses the same dotted-number addressing the
-      // Predecessor Successor feature already understands.
-      const srcTask = taskFromHandle(dragSrcKind, dragSrcIndex, dragSrcSi);
-      if(srcTask){
-        const tgtAddr = taskNumber(kind, i, si);
-        srcTask.preds = tgtAddr + 'FS';
-        update();
-      }
-    }
+  if(!isSamePlace && dragSrcKind!==null && dragSrcIndex!==null){
+    moveTaskTo(dragSrcKind, dragSrcIndex, dragSrcSi, kind, i, si);
   }
   dragSrcKind = null; dragSrcIndex = null; dragSrcSi = null;
 }
