@@ -39,7 +39,7 @@
   }
   * { box-sizing: border-box; }
   body { font-family: var(--font-sans); background: var(--surface-0); color: var(--text-primary); margin: 0; padding: 1.5rem; line-height: 1.5; }
-  .wrap { max-width: 1320px; margin: 0 auto; }
+  .wrap { max-width: 1800px; margin: 0 auto; }
   h1 { font-size: 20px; font-weight: 600; margin: 0; }
   input, select, button { font-family: var(--font-sans); border: 0.5px solid var(--border-strong); border-radius: var(--radius); background: var(--surface-2); color: var(--text-primary); }
   input, select { padding: 2px 6px; }
@@ -57,18 +57,20 @@
   td { font-size: 12px; padding: 3px 6px; border-bottom: 0.5px solid var(--border); text-align: right; white-space: nowrap; }
   th.l, td.l { text-align: left; }
   .gscroll { overflow-x: auto; border: 0.5px solid var(--border); border-radius: 8px; padding-bottom: 4px; }
-  .grow { display: flex; align-items: center; height: 32px; }
+  .grow { display: flex; align-items: center; height: 32px; margin-bottom: 3px; border-bottom: 0.5px solid var(--border); }
   .grow.sub { height: 27px; }
   .gsticky-l { position: sticky; left: 0; z-index: 3; background: var(--surface-2); display: flex; align-items: center; gap: 4px; width: 320px; flex-shrink: 0; padding: 0 4px; box-shadow: 2px 0 4px rgba(0,0,0,0.05); }
   .gsticky-r { position: sticky; right: 0; z-index: 3; background: var(--surface-2); display: flex; align-items: center; gap: 3px; width: 260px; flex-shrink: 0; justify-content: flex-end; padding: 0 4px; box-shadow: -2px 0 4px rgba(0,0,0,0.05); }
   .progress-fill { position: absolute; top: 0; bottom: 0; left: 0; pointer-events: none; }
-  .bar-label { position: absolute; top: 50%; transform: translateY(-50%); font-size: 6.8px; font-weight: 600; color: var(--text-primary); background: var(--surface-2); border: 1px solid #4FA6E0; border-radius: 3px; padding: 1px 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.3); white-space: nowrap; pointer-events: none; z-index: 5; margin-left: 5px; line-height: 1.5; }
-  .bar-label.sub { font-size: 6.2px; padding: 0px 3px; }
+  .bar-label { position: absolute; top: 50%; transform: translateY(-50%); font-size: 8.5px; font-weight: 600; color: var(--text-primary); background: var(--surface-2); border: 1px solid #4FA6E0; border-radius: 3px; padding: 1.5px 5px; box-shadow: 0 1px 3px rgba(0,0,0,0.3); white-space: nowrap; pointer-events: none; z-index: 5; margin-left: 5px; line-height: 1.5; }
+  .bar-label.sub { font-size: 7.8px; padding: 1px 4px; }
   /* flipped label — used when the default (right-of-bar) position would run into the sticky-right
      column; anchors the label's right edge to the bar's START instead, so it sits before the bar. */
   .bar-label.flip { margin-left: 0; margin-right: 5px; }
-  .gtrack { position: relative; border-radius: 4px; background: var(--surface-1); flex-shrink: 0; margin: 0 6px; }
+  .gtrack { position: relative; border-radius: 4px; background: var(--surface-1); flex-shrink: 0; margin: 0 6px; overflow: hidden; }
   .resize-handle { position: absolute; top: 0; bottom: 0; right: 0; width: 7px; cursor: ew-resize; border-radius: 0 4px 4px 0; touch-action: none; }
+  .col-resize-handle { position: absolute; top: 0; bottom: 0; right: -2px; width: 6px; cursor: col-resize; touch-action: none; z-index: 2; }
+  .col-resize-handle:hover, .col-resize-handle:active { background: rgba(176,141,62,0.35); }
   .resize-handle:hover, .resize-handle:active { background: rgba(0,0,0,0.22); }
   .drag-bar { cursor: grab; touch-action: none; }
   .drag-bar:active { cursor: grabbing; }
@@ -79,7 +81,7 @@
   .iconbtn { width: 22px; height: 22px; padding: 0; flex-shrink: 0; background: #F9D3E4; border: 1px solid #E896BC; }
   .iconbtn:hover { background: #F3B0D0; }
   .iconbtn i { font-size: 12px; color: #8A2955; }
-  .todayline { position: absolute; top: -6px; bottom: -6px; width: 2px; background: var(--today); z-index: 6; pointer-events: none; }
+  .todayline { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--today); z-index: 6; pointer-events: none; }
   /* phase/summary bars (a top-level task rolled up from its sub-tasks) are clipped into an
      arrow shape — a flat left edge and a pointed right tip — so they read as a rollup header,
      distinct from the plain rectangular task bars underneath. Fixed-px tip via calc() keeps the
@@ -175,6 +177,7 @@
       <input type="text" id="sync-url" placeholder="Paste Apps Script Web App URL (from the bundled Code.gs deployment)" oninput="syncUrl=this.value;" onchange="onSyncUrlSet();" style="flex:1; min-width:280px; height:28px; font-size:11.5px;">
       <button id="sync-btn" onclick="syncToSheet(true)" style="font-size:12px; padding:6px 12px;" title="Create the Google Sheet for this project and push current data to it"><i class="ti ti-cloud-upload" style="font-size:14px; vertical-align:-2px; margin-right:4px;"></i>Create project</button>
       <button onclick="reloadFromSheet()" style="font-size:12px; padding:6px 12px;" title="Pull this project's latest saved data back from the Sheet — replaces what's on screen, so use this only if the Sheet has newer data than what's here"><i class="ti ti-cloud-download" style="font-size:14px; vertical-align:-2px; margin-right:4px;"></i>Reload from Sheet</button>
+      <button onclick="restoreBackup()" style="font-size:12px; padding:6px 12px;" title="Undo the most recent save on the Sheet — restores whatever was there just before it, one step back"><i class="ti ti-history" style="font-size:14px; vertical-align:-2px; margin-right:4px;"></i>Restore previous backup</button>
       <label id="sync-auto-label" style="display:flex; align-items:center; gap:5px; font-size:11.5px; color:var(--text-secondary);" title="Only takes effect once the project has been created (button on the left)">
         <input type="checkbox" id="sync-auto" onchange="autoSync=this.checked; if(autoSync && projectExists) syncToSheet(false);" style="width:auto; height:auto;">
         Auto-sync on every change
@@ -245,6 +248,7 @@
       <span style="width:0.5px; height:20px; background:var(--border-strong); margin:0 2px;"></span>
       <button onclick="expandAll(true)" style="font-size:11.5px; padding:4px 10px;" title="Expand every phase into its sub-tasks"><i class="ti ti-chevrons-down" style="font-size:13px; vertical-align:-2px; margin-right:3px;"></i>Expand all</button>
       <button onclick="expandAll(false)" style="font-size:11.5px; padding:4px 10px;" title="Collapse every phase back to just its rollup bar"><i class="ti ti-chevrons-up" style="font-size:13px; vertical-align:-2px; margin-right:3px;"></i>Collapse all</button>
+      <button onclick="jumpToToday()" style="font-size:11.5px; padding:4px 10px;" title="Scroll the Gantt chart to today's date"><i class="ti ti-calendar-event" style="font-size:13px; vertical-align:-2px; margin-right:3px;"></i>Jump to Today</button>
       <span id="today-chip" style="font-size:11.5px; color:var(--today); font-weight:600; margin-left:8px;"></span>
     </div>
     <div id="ganttScroll" class="gscroll">
@@ -266,13 +270,13 @@
     <datalist id="vendor-suggestions"></datalist>
     <table id="list-table" style="border-collapse:collapse; width:100%;">
       <thead>
-        <tr>
-          <th>#</th><th class="l">1. Task</th><th class="l">2. Doer</th><th class="l">3. Type</th><th class="l">4. Depends on</th><th>5. Rel</th>
-          <th class="l" style="padding-left:8px;">6. Type</th><th>7. Safety buffer (days)</th>
-          <th>8. Dur (days)</th><th>9. % done</th>
-          <th>10. Planned start</th><th>11. Planned finish</th><th class="l" style="padding-left:8px;">12. Actual finish</th><th>13. Delay (days)</th>
-          <th class="col-budget">14. Plan (₹K)</th><th class="col-budget">15. Actual (₹K)</th><th class="col-budget">16. Variance (₹K)</th><th class="l" style="padding-left:8px;">17. Link</th>
-          <th class="l" style="padding-left:8px;">18. Vendor</th><th class="l" style="padding-left:8px;">19. Quality check</th>
+        <tr id="list-table-head-row">
+          <th data-col="0" style="position:relative;">#<span class="col-resize-handle"></span></th><th class="l" data-col="1" style="position:relative;">1. Task<span class="col-resize-handle"></span></th><th class="l" data-col="2" style="position:relative;">2. Doer<span class="col-resize-handle"></span></th><th class="l" data-col="3" style="position:relative;">3. Type<span class="col-resize-handle"></span></th><th class="l" data-col="4" style="position:relative;">4. Depends on<span class="col-resize-handle"></span></th><th data-col="5" style="position:relative;">5. Rel<span class="col-resize-handle"></span></th>
+          <th class="l" data-col="6" style="padding-left:8px; position:relative;">6. Type<span class="col-resize-handle"></span></th><th data-col="7" style="position:relative;">7. Safety buffer (days)<span class="col-resize-handle"></span></th>
+          <th data-col="8" style="position:relative;">8. Dur (days)<span class="col-resize-handle"></span></th><th data-col="9" style="position:relative;">9. % done<span class="col-resize-handle"></span></th>
+          <th data-col="10" style="position:relative;">10. Planned start<span class="col-resize-handle"></span></th><th data-col="11" style="position:relative;">11. Planned finish<span class="col-resize-handle"></span></th><th class="l" data-col="12" style="padding-left:8px; position:relative;">12. Actual finish<span class="col-resize-handle"></span></th><th data-col="13" style="position:relative;">13. Delay (days)<span class="col-resize-handle"></span></th>
+          <th class="col-budget" data-col="14" style="position:relative;">14. Plan (₹K)<span class="col-resize-handle"></span></th><th class="col-budget" data-col="15" style="position:relative;">15. Actual (₹K)<span class="col-resize-handle"></span></th><th class="col-budget" data-col="16" style="position:relative;">16. Variance (₹K)<span class="col-resize-handle"></span></th><th class="l" data-col="17" style="padding-left:8px; position:relative;">17. Link<span class="col-resize-handle"></span></th>
+          <th class="l" data-col="18" style="padding-left:8px; position:relative;">18. Vendor<span class="col-resize-handle"></span></th><th class="l" data-col="19" style="padding-left:8px; position:relative;">19. Quality check<span class="col-resize-handle"></span></th>
         </tr>
       </thead>
       <tbody id="lrows"></tbody>
@@ -303,11 +307,13 @@
       <button onclick="copyLookahead()" style="font-size:12px; padding:6px 12px;"><i class="ti ti-copy" style="font-size:14px; vertical-align:-2px; margin-right:4px;"></i>Copy as text</button>
       <span style="font-size:11.5px; color:var(--text-muted);">Shows sub-tasks directly when a phase is broken down. Overdue tasks stay listed until marked done.</span>
     </div>
+    <datalist id="doer-suggestions"></datalist>
     <table style="border-collapse:collapse; width:100%;">
       <thead>
         <tr>
-          <th class="l">Task</th><th class="l">Type</th><th>Planned start</th><th>Planned finish</th>
-          <th class="l">Status</th><th class="l" style="padding-left:8px;">Owner</th><th class="l" style="padding-left:8px;">Follow-up notes</th>
+          <th class="l">Task name</th><th class="l" style="padding-left:8px;">Doer name</th><th class="l" style="padding-left:8px;">Units</th>
+          <th style="padding-left:8px;">Planned qty</th><th>Actual qty</th><th>Variance</th>
+          <th>Planned start</th><th>Planned end</th><th class="l" style="padding-left:8px;">Actual end</th>
           <th class="l" style="padding-left:8px;">Checklists</th>
         </tr>
       </thead>
@@ -391,6 +397,13 @@
 
 </div>
 
+<!-- Phase drill-down modal — opened by a 3-second long-press on a phase's Gantt bar. Sub-tasks
+     edited here are the SAME objects used everywhere else in the tool, so every change (name,
+     duration, predecessor, %) is immediately reflected back in the Gantt/Task list once closed. -->
+<div id="phase-drilldown-overlay" onclick="if(event.target===this) closePhaseDrilldown();" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.55); z-index:2000; align-items:center; justify-content:center; padding:20px;">
+  <div id="phase-drilldown-card" style="background:var(--surface-2); border-radius:12px; padding:20px 24px; max-width:920px; width:100%; max-height:88vh; overflow-y:auto; box-shadow:0 12px 40px rgba(0,0,0,0.45);"></div>
+</div>
+
 <!-- Hidden write channel for Google Sheet sync: a real <form> submitted into a hidden <iframe> is
      a normal browser navigation, not a fetch()/XHR call, so it is NEVER subject to CORS blocking —
      unlike fetch(), it reliably reaches the Apps Script backend even on networks/browsers where
@@ -417,10 +430,18 @@ let daily = {date: (()=>{ const d=new Date(); d.setDate(d.getDate()+1); return d
 let zoomPct = 100;
 // Google Sheet sync — syncUrl is the Apps Script Web App URL (see the bundled Code.gs); when
 // autoSync is on, every update() call schedules a debounced push so the Sheet mirrors the tool.
-let syncUrl = 'https://script.google.com/macros/s/AKfycbxjI_1rG98COmWwDiwudo5YP2lKwo72DVVJrxJBFnDTXfVXEY4dTVzLFz3efcHsyy_Atw/exec';
+let syncUrl = (typeof window!=='undefined' && window.location && window.location.href.indexOf('script.google.com') >= 0)
+  ? window.location.href.split('?')[0]
+  : 'https://script.google.com/macros/s/AKfycbxjI_1rG98COmWwDiwudo5YP2lKwo72DVVJrxJBFnDTXfVXEY4dTVzLFz3efcHsyy_Atw/exec';
 let autoSync = true;
 let syncTimer = null;
 let syncInFlight = false;
+// the server's "syncedAt" timestamp as of the last time THIS tab successfully loaded or synced
+// this project. Before every push, syncToSheet() re-checks the server's CURRENT syncedAt against
+// this — if it's moved on since (another tab/session synced in between), this tab's own data is
+// stale and pushing it would silently overwrite whatever that other sync just saved. null means
+// "not yet known" (e.g. a brand-new project that's never synced), which is treated as safe to sync.
+let lastKnownSyncedAt = null;
 let lastSyncAt = '';
 // syncDirty just marks "something changed since the last successful sync" — the actual push
 // happens on a fixed 30-second timer below, not on every keystroke, so rapid edits don't spam
@@ -490,6 +511,31 @@ let hasUnsyncedEdits = false;
 // alone, because that flag by itself still let the flush-before-switch push the ambiguous blank
 // state on the very next switch.
 let blockAutoSync = false;
+// ---------------- v3: live multi-user field sync (separate from the whole-project sync above) ----------------
+// unitSnapshots[id] holds the last JSON string we know the SERVER has for that unit — either
+// because we just pushed it, or because we just pulled it from another session. Comparing a
+// unit's CURRENT JSON against this on every tick is what detects "this changed locally and needs
+// pushing" without having to touch every individual input's onchange/oninput handler.
+let unitSnapshots = {};
+// ISO timestamp of the last successful pull — sent as `since` on the next pull so the server only
+// has to return units that changed after that point, not the whole table every time.
+let lastUnitsPullTs = '';
+let unitsTickInFlight = false;
+// ---------------- v3.1: "Sheet-as-input" — edits/new rows typed directly into the Task list tab ----------------
+// taskListRowSnapshot[id] holds the JSON of the editable-fields tuple (see taskListEditableTuple())
+// we last knew was true for that task, whether from our own state or from a prior Sheet read —
+// used the same way unitSnapshots is, to detect "Manoj actually changed this cell" vs an echo of
+// what the tool itself just wrote there.
+let taskListRowSnapshot = {};
+// sheet row numbers we've already turned into a real local task and queued a "claim" write-back
+// for, but haven't yet confirmed landed — stops the SAME still-unclaimed row being turned into a
+// second duplicate task on the very next tick while that write-back is in flight.
+let pendingClaimRows = new Set();
+// v3.1 — same snapshot-diff pattern as taskListRowSnapshot, but for the fixed 9-role "Project
+// team" table on the Summary tab (keyed by the internal role key like 'pm', not the row number,
+// since these rows never move/get added — see teamRoles at the top of this file).
+let teamRowSnapshot = {};
+let taskListTickInFlight = false;
 const BASE_PXW = 5;
 let historyStack = [];
 let historyPos = -1;
@@ -504,7 +550,13 @@ let dragSrcSi = null;
 // spanning both critical-chain and feeding-chain tasks); its actual start is the LATEST of every
 // listed constraint. Left blank (or a bare relation with no number, e.g. just "SS") it defaults to
 // the task directly above this one in its own list. See parsePreds()/schedule().
-function newTask(name,duration,plan){ return {name, duration, plan, act:'', adate:'', owner:'', notes:'', shift:'', preds:'', pct:0, infoReady:false, materialReady:false, labourReady:false, link:'', infoLink:'', materialLink:'', labourLink:'', qcLink:'', qcDone:false, vendor:'', taskType:'critical', buffer:0, manualStart:null, origAddr:null, subtasks:[], expanded:false}; }
+// v3 — a short, effectively-unique id, generated once when a task is first created and never
+// changed afterwards (even when the task moves/reorders). This is what the live multi-user
+// field-sync loop (unitsPushPullTick, further down) uses to address a top-level task independent
+// of its current array position — array index isn't stable enough for that, since reordering
+// shifts everyone after it.
+function genId(){ return 't_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2,8); }
+function newTask(name,duration,plan){ return {id: genId(), name, duration, plan, act:'', adate:'', owner:'', notes:'', shift:'', preds:'', pct:0, infoReady:false, materialReady:false, labourReady:false, link:'', infoLink:'', materialLink:'', labourLink:'', qcLink:'', qcDone:false, vendor:'', unit:'', plannedQty:'', actualQty:'', taskType:'critical', buffer:0, manualStart:null, origAddr:null, subtasks:[], expanded:false}; }
 // captures a task's CURRENT unified # the very first time it's ever rendered, and never touches
 // it again — this is what lets the # column keep showing "was 1.1" after the task has been
 // dragged somewhere else, without changing how the task is actually addressed internally
@@ -788,6 +840,16 @@ function fmt(n){ return Math.round(n*10)/10; }
 function money(n){ const r = Math.round(n*10)/10; return (r>0?'+':'') + r.toLocaleString('en-IN'); }
 function startDate(){ return new Date((meta.start||'2026-08-01')+'T00:00:00'); }
 function dateAt(days){ const d = startDate(); d.setDate(d.getDate()+Math.round(days)); return d; }
+// the reverse of dateAt() — converts a "YYYY-MM-DD" date string back into a day-offset from the
+// project's own start date. Used by the editable Planned start/finish boxes in the Task list, so
+// typing a date there can set manualStart / adjust duration the same way dragging a bar does.
+function dayFromDateStr(dateStr){
+  if(!dateStr) return null;
+  const d = new Date(dateStr+'T00:00:00');
+  if(isNaN(d.getTime())) return null;
+  const sD = startDate();
+  return Math.round((d-sD)/86400000);
+}
 function fmtD(d){ return d.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'2-digit'}); }
 function hasSub(t){ return !!(t.subtasks && t.subtasks.length); }
 // a phase's own rolled-up duration must include each critical sub-task's own safety buffer, so
@@ -1149,6 +1211,15 @@ function setBarTitle(id, startDay, endDay, name){
   el.title = (name ? name+'\n' : '') + `Planned start: ${fmtD(dateAt(startDay))}\nPlanned finish: ${fmtD(dateAt(endDay))}`;
 }
 function setT(id,html){ const el = document.getElementById(id); if(el) el.innerHTML = html; }
+// like setT(), but for the Planned start/finish cells specifically — those are a plain read-only
+// span for a phase (rollup, never directly editable) but an actual <input type="date"> for a bare
+// task/sub-task (editable — see plannedStartCell/plannedFinishCell). innerHTML doesn't affect an
+// input's displayed value, so this sets .value for inputs and falls back to innerHTML otherwise.
+function setDateVal(id, dateObj){
+  const el = document.getElementById(id); if(!el) return;
+  if(el.tagName==='INPUT'){ el.value = fmtISO(dateObj); }
+  else { el.innerHTML = fmtD(dateObj); }
+}
 function shortName(name){
   if(!name) return '';
   let s = String(name).trim();
@@ -1169,20 +1240,33 @@ function setBarLabel(id,startDay,endDay,total,html){
   el.style.left = endPct+'%';
   el.style.right = '';
   el.innerHTML = html;
+  // hard cap on rendered width, regardless of how long the underlying task name is — a FIXED
+  // pixel cap, not a percentage of the row's own gtrack width, because gtrack can be enormous on
+  // a long project even at low zoom (e.g. 700+ days), which made a percentage-based cap far too
+  // generous to actually stop a label spilling into neighbouring columns. Sub-task labels use a
+  // smaller cap to match their smaller font.
+  const isSubLabel = el.classList && el.classList.contains('sub');
+  el.style.maxWidth = (isSubLabel ? 90 : 110) + 'px';
+  el.style.overflow = 'hidden';
+  el.style.textOverflow = 'ellipsis';
 }
 // after labels are positioned, check each one against its row's sticky-right column (which is
 // pinned to the visible edge of the scrolled viewport, not a fixed point on the timeline) and
-// flip any that would otherwise overlap it to sit before the bar instead of after.
+// flip any that would otherwise overlap it to sit before the bar instead of after — this is a
+// "nicer default position" pass only; the actual guarantee against ever visually overlapping the
+// sticky-left/right columns comes from gtrack's own `overflow: hidden` (see its CSS) — the
+// browser itself clips anything positioned outside a row's own track, so no JS pixel math can
+// get this wrong the way earlier attempts here did.
 function fixLabelOverlaps(){
   if(typeof document.querySelectorAll !== 'function') return;
   const rows = document.querySelectorAll('.grow');
   if(!rows || typeof rows.forEach !== 'function') return;
   rows.forEach(row => {
     if(!row || typeof row.querySelector !== 'function' || typeof row.querySelectorAll !== 'function') return;
-    const stickyR = row.querySelector('.gsticky-r');
-    if(!stickyR || typeof stickyR.getBoundingClientRect !== 'function') return;
-    const sRect = stickyR.getBoundingClientRect();
-    if(!sRect || (sRect.width===0 && sRect.height===0)) return;
+    const track = row.querySelector('.gtrack');
+    if(!track || typeof track.getBoundingClientRect !== 'function') return;
+    const tRect = track.getBoundingClientRect();
+    if(!tRect || (tRect.width===0 && tRect.height===0)) return;
     row.querySelectorAll('.bar-label').forEach(label => {
       if(typeof label.getBoundingClientRect !== 'function') return;
       const startPct = label.getAttribute('data-start-pct');
@@ -1193,10 +1277,19 @@ function fixLabelOverlaps(){
       label.style.right = '';
       const lRect = label.getBoundingClientRect();
       if(!lRect || (lRect.width===0 && lRect.height===0)) return;
-      if(lRect.right > sRect.left){
+      // if sitting after the bar would run past the track's own right edge, try before the bar
+      // instead — purely so the full label text has a chance to show rather than getting clipped;
+      // gtrack's overflow:hidden means either choice is safe regardless.
+      if(lRect.right > tRect.right){
         if(label.classList) label.classList.add('flip');
         label.style.left = '';
         label.style.right = (100-Number(startPct))+'%';
+        const flippedRect = label.getBoundingClientRect();
+        if(flippedRect && flippedRect.left < tRect.left){
+          if(label.classList) label.classList.remove('flip');
+          label.style.right = '';
+          label.style.left = endPct+'%';
+        }
       }
     });
   });
@@ -1239,6 +1332,24 @@ function fitZoom(){
   const z = Math.round(avail/(BASE_PXW*Math.max(total,1))*100);
   zoomPct = Math.max(50, Math.min(400, isFinite(z) ? z : 100));
   applyZoomWidths();
+}
+// scrolls the Gantt chart's horizontal scrollbar so today's date is centred in the visible area —
+// today's own vertical line (see the todayline elements) is positioned at a fixed point on the
+// timeline, so it naturally scrolls out of view on a long project the same way any task bar would;
+// this gives an instant way back to it instead of having to scroll/search manually.
+function jumpToToday(){
+  const scroller = document.getElementById('ganttScroll');
+  const track = document.querySelector('.gtrack');
+  if(!scroller || !track) return;
+  const {total} = schedule();
+  const todayDate = new Date(); todayDate.setHours(0,0,0,0);
+  const sD = startDate(); sD.setHours(0,0,0,0);
+  const todayDaysRaw = (todayDate - sD)/86400000;
+  const todayDaysClamped = Math.max(0, Math.min(total, todayDaysRaw));
+  const trackWidth = track.clientWidth || (total*pxPerDay());
+  const todayPx = (total>0 ? (todayDaysClamped/total) : 0) * trackWidth;
+  const visibleWidth = scroller.clientWidth - 320 - 260; // subtract the sticky left/right columns' width
+  scroller.scrollLeft = Math.max(0, todayPx - Math.max(0, visibleWidth)/2);
 }
 function applyZoomWidths(){
   const {total} = schedule();
@@ -1358,9 +1469,9 @@ function drawDependencyArrows(){
     const t = anchor(tgtId, tSide);
     if(!s || !t) return;
     const d = elbowPath(s, t, tSide);
-    paths += `<path d="${d}" style="stroke:#ec4899; stroke-width:1.4; stroke-dasharray:0.7,2.8; stroke-linecap:round; fill:none;" marker-end="url(#dep-arrowhead)"></path>`;
+    paths += `<path d="${d}" style="stroke:#ec4899; stroke-width:1; stroke-dasharray:0.7,3.2; stroke-linecap:round; fill:none; opacity:0.4;" marker-end="url(#dep-arrowhead)"></path>`;
   });
-  svg.innerHTML = `<defs><marker id="dep-arrowhead" markerWidth="6.3" markerHeight="6.3" refX="4.9" refY="2.45" orient="auto"><path d="M0,0 L4.9,2.45 L0,4.9 Z" style="fill:#ec4899;"></path></marker></defs>${paths}`;
+  svg.innerHTML = `<defs><marker id="dep-arrowhead" markerWidth="5.5" markerHeight="5.5" refX="4.3" refY="2.15" orient="auto"><path d="M0,0 L4.3,2.15 L0,4.3 Z" style="fill:#ec4899; opacity:0.5;"></path></marker></defs>${paths}`;
 }
 
 function update(){
@@ -1405,9 +1516,10 @@ function update(){
   // for them; below that, only the bold week marks show, same as before.
   let ticks = '';
   const totalDays = Math.floor(total);
+  const dayPx = pxPerDay();
   for(let d=0; d<=totalDays; d++){
     const isWeekMark = d % 7 === 0;
-    if(!isWeekMark && zoomPct < 150) continue;
+    if(!isWeekMark && dayPx < 16) continue; // only show every-day numbers once there's actually enough pixel space per day for them not to collide
     const size = isWeekMark ? '11px' : '9px';
     const weight = isWeekMark ? 700 : 400;
     const color = isWeekMark ? 'var(--text-secondary)' : 'var(--text-muted)';
@@ -1426,7 +1538,16 @@ function update(){
   ticks += `<span style="position:absolute; left:${tp}%; top:-15px; transform:translateX(-50%); font-size:9.5px; font-weight:700; color:var(--today); white-space:nowrap;">${todayLabel}</span>`;
   setT('ruler-track', ticks);
   setT('today-chip', chip);
-  document.querySelectorAll('.todayline').forEach(el => { el.style.display='block'; el.style.left = tp+'%'; });
+  {
+    // computed directly from pxPerDay() — a pure function of zoomPct, no DOM measurement
+    // involved — so every row's today-line lands at exactly the same pixel with zero risk of
+    // picking the wrong reference element or measuring it before its width is actually set.
+    const pxLeft = todayDaysClamped * pxPerDay();
+    document.querySelectorAll('.todayline').forEach(el => {
+      el.style.display = 'block';
+      el.style.left = pxLeft+'px';
+    });
+  }
 
   criticalTasks.forEach((t,i) => {
     const pc = phaseColor('crit',i);
@@ -1444,8 +1565,8 @@ function update(){
         else { bufEl.style.display='none'; }
       }
     }
-    setT('lpd-crit-'+i, fmtD(dateAt(t.start)));
-    setT('lpf-crit-'+i, fmtD(dateAt(t.end)));
+    setDateVal('lpd-crit-'+i, dateAt(t.start));
+    setDateVal('lpf-crit-'+i, dateAt(t.end));
     setT('ldl-crit-'+i, delayHtml(t));
     setT('lvr-crit-'+i, varHtml(t));
     setT('lrel-crit-'+i, predsLabelText('crit',i,t));
@@ -1474,8 +1595,8 @@ function update(){
             else { subBufEl.style.display='none'; }
           }
         }
-        setT(`lpd-crit-${i}-s-${si}`, fmtD(dateAt(st.start)));
-        setT(`lpf-crit-${i}-s-${si}`, fmtD(dateAt(st.end)));
+        setDateVal(`lpd-crit-${i}-s-${si}`, dateAt(st.start));
+        setDateVal(`lpf-crit-${i}-s-${si}`, dateAt(st.end));
         setT(`ldl-crit-${i}-s-${si}`, delayHtml(st));
         setT(`lvr-crit-${i}-s-${si}`, varHtml(st));
         setT(`gdoer-crit-${i}-s-${si}`, escHtml(st.owner||''));
@@ -1508,8 +1629,8 @@ function update(){
       }
     }
     setT('lfeeds-feed-'+ci, predsSummaryNames('feed',ci,t));
-    setT('lpd-feed-'+ci, fmtD(dateAt(t.start)));
-    setT('lpf-feed-'+ci, fmtD(dateAt(t.end)));
+    setDateVal('lpd-feed-'+ci, dateAt(t.start));
+    setDateVal('lpf-feed-'+ci, dateAt(t.end));
     setT('ldl-feed-'+ci, delayHtml(t));
     setT('lvr-feed-'+ci, varHtml(t));
     setT('lrel-feed-'+ci, predsLabelText('feed',ci,t));
@@ -1537,8 +1658,8 @@ function update(){
             else { subBufEl.style.display='none'; }
           }
         }
-        setT(`lpd-feed-${ci}-s-${si}`, fmtD(dateAt(st.start)));
-        setT(`lpf-feed-${ci}-s-${si}`, fmtD(dateAt(st.end)));
+        setDateVal(`lpd-feed-${ci}-s-${si}`, dateAt(st.start));
+        setDateVal(`lpf-feed-${ci}-s-${si}`, dateAt(st.end));
         setT(`ldl-feed-${ci}-s-${si}`, delayHtml(st));
         setT(`lvr-feed-${ci}-s-${si}`, varHtml(st));
         setT(`gdoer-feed-${ci}-s-${si}`, escHtml(st.owner||''));
@@ -1687,7 +1808,7 @@ function drawLookaheadDependencyArrows(rows){
     const t = anchor('lh-bar-'+tgtKey, tSide);
     if(!s || !t) return;
     const d = elbowPath(s, t, tSide);
-    paths += `<path d="${d}" style="stroke:#ec4899; stroke-width:1.4; stroke-dasharray:0.7,2.8; stroke-linecap:round; fill:none;" marker-end="url(#lh-dep-arrowhead)"></path>`;
+    paths += `<path d="${d}" style="stroke:#ec4899; stroke-width:1; stroke-dasharray:0.7,3.2; stroke-linecap:round; fill:none; opacity:0.4;" marker-end="url(#lh-dep-arrowhead)"></path>`;
   });
   svg.innerHTML = `<defs><marker id="lh-dep-arrowhead" markerWidth="6.3" markerHeight="6.3" refX="4.9" refY="2.45" orient="auto"><path d="M0,0 L4.9,2.45 L0,4.9 Z" style="fill:#ec4899;"></path></marker></defs>${paths}`;
 }
@@ -1743,31 +1864,73 @@ function renderLookaheadGantt(rows, from, winEnd){
 
   return `<div style="overflow-x:auto;"><div id="lh-gantt-wrap" style="position:relative; min-width:600px;"><div id="lh-gantt-rows">${ruler}${body}</div><svg id="lh-dep-svg" style="position:absolute; top:0; left:0; overflow:visible; pointer-events:none; z-index:1;"></svg></div></div>`;
 }
+// unique doer/owner names already used anywhere across tasks — offered as autocomplete
+// suggestions on the "3 days planning" Doer name field, mirroring vendorSuggestions() below.
+function doerSuggestions(){
+  const names = new Set();
+  allLeafTasks().forEach(t => { if(t.owner) names.add(t.owner); });
+  return Array.from(names).sort();
+}
+function renderDoerSuggestions(){
+  const dl = document.getElementById('doer-suggestions');
+  if(!dl) return;
+  dl.innerHTML = doerSuggestions().map(v => `<option value="${String(v).replace(/"/g,'&quot;')}"></option>`).join('');
+}
+// shared "Checklists" cell — just the general "Link" field from the Task list tab (column 17,
+// t.link), shown as a single clickable icon. Used by both the "3 days planning" tab and the
+// "Daily follow-up" tab so a link pasted anywhere for a task shows up consistently in both places.
+function checklistIconsHtml(t, path){
+  return `<button class="iconbtn" onclick="openLink(${path},'link')" title="${t.link ? 'Open: '+t.link : 'No link set — add one in the Task list tab (column 17)'}" style="${t.link ? '' : 'opacity:0.3;'}"><i class="ti ti-link" style="font-size:11px;"></i></button>`;
+}
+// "3 days planning" Planned qty / Actual qty / Variance — kept deliberately independent of the
+// app-wide update() cycle (see qtyCell's comment in renderLookahead below). lhVarianceCellId()
+// gives each row's Variance <td> a stable id; lhVarianceHtml() computes its content from a task
+// object; lhPatchVariance() is what the qty inputs' oninput calls to refresh just that one cell.
+function lhVarianceCellId(kind,i,si){ return `lh-var-${kind}-${i}-${(si===null||si===undefined)?'x':si}`; }
+function lhVarianceHtml(t){
+  const pq = t.plannedQty, aq = t.actualQty;
+  if(pq===''||pq===null||pq===undefined||aq===''||aq===null||aq===undefined) return '<span style="color:var(--text-muted);">—</span>';
+  const v = (Number(aq)||0) - (Number(pq)||0);
+  return `<span style="color:${v<0?'var(--red)':'var(--green)'}; font-weight:600;">${money(v)}</span>`;
+}
+function lhPatchVariance(kind,i,si){
+  const t = taskFromHandle(kind, i, si);
+  if(!t) return;
+  setT(lhVarianceCellId(kind,i,si), lhVarianceHtml(t));
+}
 function renderLookahead(){
   const {rows, from, winEnd} = lookaheadRows();
   const dEl = document.getElementById('lh-date'); if(dEl) dEl.textContent = fmtD(from);
   const nEl = document.getElementById('lh-days'); if(nEl) nEl.value = lookahead.days;
   const today = new Date(); today.setHours(0,0,0,0);
-  const ocell = (t,path) => `<input type="text" value="${(t.owner||'').replace(/"/g,'&quot;')}" placeholder="Assign to" oninput="${path}.owner=this.value; scheduleAutoSync();" style="width:110px; font-size:11.5px; height:25px;">`;
-  const ncell = (t,path) => `<input type="text" value="${(t.notes||'').replace(/"/g,'&quot;')}" placeholder="Follow-up note" oninput="${path}.notes=this.value; scheduleAutoSync();" style="width:220px; font-size:11.5px; height:25px;">`;
+  const doerCell = (t,path) => `<input type="text" list="doer-suggestions" value="${(t.owner||'').replace(/"/g,'&quot;')}" placeholder="Doer name" oninput="${path}.owner=this.value; scheduleAutoSync();" style="width:130px; font-size:11.5px; height:25px;">`;
+  const unitCell = (t,path) => `<input type="text" value="${String(t.unit||'').replace(/"/g,'&quot;')}" placeholder="e.g. sqft, cum" oninput="${path}.unit=this.value; scheduleAutoSync();" style="width:90px; font-size:11.5px; height:25px;">`;
+  // qty edits only need to (a) save the value and (b) refresh the Variance cell right next to it —
+  // they never touch scheduling/dates, so calling the app-wide update() here (as this used to) was
+  // both unnecessary and harmful: update() rebuilds this whole table's innerHTML on every keystroke,
+  // which kicks the input out of focus mid-type and also re-renders the top summary cards for no
+  // reason. lhPatchVariance() (below) does the narrow, correct thing instead — same pattern the
+  // Task list tab already uses for its own budget Variance column.
+  const qtyCell = (t,path,field,kind,i,si) => `<input type="number" step="any" value="${t[field]===undefined||t[field]===null?'':t[field]}" placeholder="Qty" oninput="${path}.${field}=this.value===''?'':(Number(this.value)||0); scheduleAutoSync(); lhPatchVariance('${kind}',${i},${(si===null||si===undefined)?'null':si});" style="width:80px; font-size:11.5px; height:25px; text-align:right;">`;
+  const actualFinishCell = (t,path) => `<input type="date" value="${t.adate||''}" onchange="${path}.adate=this.value; update();" style="width:130px; font-size:10.5px; height:25px;">`;
   // small buttons to the checklist/FMS links that must be worked through before this task is
-  // marked done — dimmed when no link has been set yet for that category.
-  const clcell = (t,path) => {
-    const mk = (field, icon, label, ready) => `<button class="iconbtn" onclick="openLink(${path},'${field}')" title="${t[field] ? label+': '+t[field] : 'No '+label.toLowerCase()+' link set (add one in the Readiness tab)'}" style="${t[field] ? '' : 'opacity:0.3;'} ${ready?'border-color:var(--green);':''}"><i class="ti ti-${icon}" style="font-size:11px;"></i></button>`;
-    return `<div style="display:flex; gap:3px;">${mk('infoLink','file-text','Drawings',t.infoReady)}${mk('materialLink','package','Material (MR)',t.materialReady)}${mk('labourLink','users','Labour (contractor form)',t.labourReady)}</div>`;
-  };
+  // marked done — dimmed when no link has been set yet for that category. Shared with the Daily
+  // follow-up tab via checklistIconsHtml() below, so both tabs show the exact same set (Drawings,
+  // Material, Labour readiness links plus the general "Link" field from Task list column 17).
+  const clcell = (t,path) => checklistIconsHtml(t,path);
   let html = '';
   rows.forEach(({t, kind, i, si, type, color, overdue}) => {
-    const s = taskStatus(t, from, winEnd, today);
     const path = taskPath(kind, i, si);
     html += `<tr${overdue ? ' style="background:rgba(163,45,45,0.07);"' : ''}>
       <td class="l">${t.name}${overdue ? ' <span style="font-size:10px; color:var(--red); font-weight:700;">(carried over)</span>' : ''}</td>
-      <td class="l"><span style="color:${color}; font-weight:600; font-size:11px;">${type}</span></td>
+      <td class="l" style="padding-left:8px;">${doerCell(t,path)}</td>
+      <td class="l" style="padding-left:8px;">${unitCell(t,path)}</td>
+      <td style="padding-left:8px;">${qtyCell(t,path,'plannedQty',kind,i,si)}</td>
+      <td>${qtyCell(t,path,'actualQty',kind,i,si)}</td>
+      <td id="${lhVarianceCellId(kind,i,si)}">${lhVarianceHtml(t)}</td>
       <td>${fmtD(dateAt(t.start))}</td>
       <td>${fmtD(dateAt(t.end))}</td>
-      <td class="l"><span style="color:${s.color}; font-weight:600; font-size:11.5px;">${s.label}</span></td>
-      <td class="l" style="padding-left:8px;">${ocell(t,path)}</td>
-      <td class="l" style="padding-left:8px;">${ncell(t,path)}</td>
+      <td class="l" style="padding-left:8px;">${actualFinishCell(t,path)}</td>
       <td class="l" style="padding-left:8px;">${clcell(t,path)}</td>
     </tr>`;
   });
@@ -1776,15 +1939,15 @@ function renderLookahead(){
   if(empty) empty.style.display = rows.length ? 'none' : 'block';
   setT('lh-gantt', renderLookaheadGantt(rows, from, winEnd));
   drawLookaheadDependencyArrows(rows);
+  renderDoerSuggestions();
 }
 function copyLookahead(){
   const {rows, from, winEnd} = lookaheadRows();
-  const today = new Date(); today.setHours(0,0,0,0);
   let txt = `${meta.name||'Project'} — 3 days planning (${fmtD(from)} to ${fmtD(winEnd)})\n\n`;
   if(!rows.length){ txt += 'No tasks fall in this window.'; }
   rows.forEach(({t, overdue}) => {
-    const s = taskStatus(t, from, winEnd, today);
-    txt += `• ${t.name}${overdue ? ' [CARRIED OVER — not done]' : ''}\n   ${fmtD(dateAt(t.start))} → ${fmtD(dateAt(t.end))} · ${s.label}${t.owner?' · Owner: '+t.owner:''}${t.notes?' · Note: '+t.notes:''}\n`;
+    const qtyTxt = (t.plannedQty!==''&&t.plannedQty!=null) ? ` · Planned qty: ${t.plannedQty}${t.unit?' '+t.unit:''}${(t.actualQty!==''&&t.actualQty!=null)?' · Actual qty: '+t.actualQty+(t.unit?' '+t.unit:''):''}` : '';
+    txt += `• ${t.name}${overdue ? ' [CARRIED OVER — not done]' : ''}\n   ${fmtD(dateAt(t.start))} → ${fmtD(dateAt(t.end))}${t.owner?' · Doer: '+t.owner:''}${qtyTxt}${t.adate?' · Actual finish: '+fmtD(new Date(t.adate+'T00:00:00')):''}\n`;
   });
   navigator.clipboard.writeText(txt).then(() => alert('Copied — paste into WhatsApp or email.'))
     .catch(() => alert('Could not copy automatically. Select the table and copy manually.'));
@@ -1831,6 +1994,7 @@ function dailyRowHtml(r){
       <option value="" ${(t.shift===''||t.shift==null)?'selected':''}>Full day</option>
     </select>
     <input type="text" value="${(t.notes||'').replace(/"/g,'&quot;')}" placeholder="Note" oninput="${path}.notes=this.value; scheduleAutoSync();" style="width:170px; font-size:11.5px; height:26px;">
+    ${checklistIconsHtml(t,path)}
   </div>`;
 }
 
@@ -1842,7 +2006,7 @@ function dailyRowHtml(r){
 function dailyLinkBox(field){
   const val = daily[field] || '';
   return `<div style="display:flex; align-items:center; gap:6px; margin:4px 0 10px;">
-    <input type="text" value="${String(val).replace(/"/g,'&quot;')}" oninput="daily.${field}=this.value; scheduleAutoSync();" placeholder="Paste any link (WhatsApp, attendance, drive...)" style="flex:1; max-width:320px; font-size:11.5px; height:26px;">
+    <input type="text" value="${String(val).replace(/"/g,'&quot;')}" oninput="daily.${field}=this.value; scheduleLocalSave(); scheduleAutoSync();" placeholder="Paste any link (WhatsApp, attendance, drive...)" style="flex:1; max-width:320px; font-size:11.5px; height:26px;">
     <button class="iconbtn" onclick="if(daily.${field}) window.open(daily.${field}, '_blank');" title="${val ? 'Open: '+val : 'No link set'}" style="${val ? '' : 'opacity:0.35;'}"><i class="ti ti-external-link" style="font-size:12px;"></i></button>
   </div>`;
 }
@@ -1865,6 +2029,17 @@ function renderDaily(){
   html += `<div class="shift-head">First half · ${shift1}</div>`;
   html += dailyLinkBox('link1');
   html += g1.length ? g1.map(dailyRowHtml).join('') : `<p style="font-size:12px; color:var(--text-muted); margin:4px 0;">No tasks assigned yet.</p>`;
+
+html += `<div class="shift-head" style="background:#eef4ff;color:#1e40af;border-left:4px solid #2563eb;padding:8px 12px;border-radius:6px;font-weight:600;">📧 Daily Mail Alert</div>`;
+
+html += dailyLinkBox('link1');
+
+if (g1.length) {
+  html += g1.map(dailyRowHtml).join('');
+}
+
+
+
   html += `<div class="shift-head">Second half · ${shift2}</div>`;
   html += dailyLinkBox('link2');
   html += g2.length ? g2.map(dailyRowHtml).join('') : `<p style="font-size:12px; color:var(--text-muted); margin:4px 0;">No tasks assigned yet.</p>`;
@@ -2182,9 +2357,10 @@ function inpText(value,onInput,width){ return `<input type="text" value="${Strin
 // name field for a phase (a top-level task with sub-tasks) — displayed in upper case so phases
 // read as headings at a glance, distinct from the sentence-case sub-task names underneath.
 // text-transform is purely visual; the underlying task name text is left as typed.
-function inpTextName(value,onInput,width,isPhase){
+function inpTextName(value,onInput,width,isPhase,responsive){
   const extra = isPhase ? 'text-transform:uppercase; font-weight:700; letter-spacing:0.3px;' : '';
-  return `<input type="text" value="${String(value).replace(/"/g,'&quot;')}" oninput="${onInput} scheduleAutoSync();" style="width:${width}px; flex-shrink:0; font-size:11.5px; height:24px; ${extra}">`;
+  const sizeStyle = responsive ? 'flex:1; min-width:60px;' : `width:${width}px; flex-shrink:0;`;
+  return `<input type="text" value="${String(value).replace(/"/g,'&quot;')}" oninput="${onInput} scheduleAutoSync();" style="${sizeStyle} font-size:11.5px; height:24px; ${extra}">`;
 }
 function inpDur(value,onInput,width){ return `<input type="number" min="1" step="1" value="${value}" oninput="${onInput} scheduleAutoSync();" style="width:${width}px; flex-shrink:0; font-size:11.5px; height:24px;">`; }
 function inpDate(value,onInput,width){ return `<input type="date" value="${value}" onchange="${onInput}" style="width:${width}px; flex-shrink:0; font-size:10.5px; height:24px;">`; }
@@ -2337,7 +2513,7 @@ function ganttTopRow(kind, i, t){
       ${durCell}
     </div>
     <div class="gtrack" id="gtrack-${kind}-${i}" style="height:22px;">
-      <div id="bar-${kind}-${i}" class="${sub?'bar-phase':'drag-bar'}" data-kind="${kind}" data-i="${i}" data-si="" style="position:absolute; top:2px; bottom:2px; border-radius:4px; overflow:hidden; background:${pc.base}; ${!sub && t.manualStart!=null ? 'outline:1.5px dashed var(--gold); outline-offset:1px;' : ''}">
+      <div id="bar-${kind}-${i}" class="${sub?'bar-phase':'drag-bar'}" data-kind="${kind}" data-i="${i}" data-si="" ${sub ? `onpointerdown="startLongPress('${kind}',${i},event)" onpointerup="cancelLongPress()" onpointerleave="cancelLongPress()" onpointercancel="cancelLongPress()" title="Hold for 3 seconds to open this phase's detail view"` : ''} style="position:absolute; top:2px; bottom:2px; border-radius:4px; overflow:hidden; background:${pc.base}; ${!sub && t.manualStart!=null ? 'outline:1.5px dashed var(--gold); outline-offset:1px;' : ''}">
         <div class="progress-fill" id="prog-${kind}-${i}"></div>
         <div class="resize-handle" data-kind="${kind}" data-i="${i}" data-si=""></div>
       </div>
@@ -2623,11 +2799,240 @@ function attachResizeHandles(){
     };
   });
 }
+// ---------------- Phase drill-down (3-second long-press on a phase's Gantt bar) ----------------
+let longPressTimer = null;
+let drilldownKind = null, drilldownIdx = null;
+function startLongPress(kind, i, ev){
+  cancelLongPress();
+  longPressTimer = setTimeout(() => { openPhaseDrilldown(kind, i); }, 3000);
+}
+function cancelLongPress(){
+  if(longPressTimer){ clearTimeout(longPressTimer); longPressTimer = null; }
+}
+function openPhaseDrilldown(kind, i){
+  cancelLongPress();
+  drilldownKind = kind; drilldownIdx = i;
+  renderPhaseDrilldown();
+  const overlay = document.getElementById('phase-drilldown-overlay');
+  if(overlay) overlay.style.display = 'flex';
+}
+// closing re-runs createAll() so the main Gantt/Task list picks up anything edited in the modal —
+// same objects, so this is just making sure every other id-based element gets freshly rebuilt.
+function closePhaseDrilldown(){
+  drilldownKind = null; drilldownIdx = null;
+  const overlay = document.getElementById('phase-drilldown-overlay');
+  if(overlay) overlay.style.display = 'none';
+  createAll();
+}
+// closes the drill-down and switches straight to the Gantt tab, scrolled to this phase's bar —
+// a quick way to see the edits just made actually reflected there, not just trust that they did.
+function closePhaseDrilldownAndViewGantt(){
+  const kind = drilldownKind, i = drilldownIdx;
+  closePhaseDrilldown();
+  showTab('gantt');
+  setTimeout(() => {
+    const el = document.getElementById('gtrack-'+kind+'-'+i);
+    if(el) el.scrollIntoView({behavior:'smooth', block:'center'});
+  }, 60);
+}
+function drilldownParent(){
+  if(drilldownKind===null || drilldownIdx===null) return null;
+  return drilldownKind==='crit' ? criticalTasks[drilldownIdx] : (feedingChains[drilldownIdx] ? feedingChains[drilldownIdx].tasks[0] : null);
+}
+function renderPhaseDrilldown(){
+  const card = document.getElementById('phase-drilldown-card');
+  const t = drilldownParent();
+  if(!card) return;
+  if(!t){ closePhaseDrilldown(); return; }
+  schedule(); // make sure start/end/duration are current before drawing the mini-Gantt
+  const pc = phaseColor(drilldownKind, drilldownIdx);
+  const subs = t.subtasks || [];
+  // mini-Gantt scaled to the sub-tasks' OWN min(start)..max(end) span, not just t.start/t.duration
+  // — stays legible and accurate even if a manual date pin has shifted things around, since it's
+  // reading the sub-tasks' actual computed positions rather than assuming they tile evenly.
+  const finiteSubs = subs.filter(st => Number.isFinite(st.start) && Number.isFinite(st.end));
+  let ganttHtml = '';
+  if(finiteSubs.length){
+    const lo = Math.min(...finiteSubs.map(st=>st.start));
+    const hi = Math.max(...finiteSubs.map(st=>st.end));
+    const span = Math.max(hi-lo, 1);
+    const ganttRows = subs.map((st,si) => {
+      const leftPct = ((st.start-lo)/span)*100;
+      const widthPct = Math.max(((st.end-st.start)/span)*100, 1.5);
+      return `<div style="display:flex; align-items:center; gap:8px; height:20px; margin-bottom:3px;">
+        <span style="width:140px; flex-shrink:0; font-size:10.5px; color:var(--text-secondary); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${escHtml(st.name)}">${si+1}. ${escHtml(st.name)}</span>
+        <div style="position:relative; flex:1; height:12px; background:var(--surface-2); border-radius:3px;">
+          <div style="position:absolute; top:0; bottom:0; left:${leftPct}%; width:${widthPct}%; background:${pc.base}; border-radius:3px;" title="${fmtD(dateAt(st.start))} → ${fmtD(dateAt(st.end))}"></div>
+        </div>
+      </div>`;
+    }).join('');
+    ganttHtml = `<div style="border:0.5px solid var(--border-strong); border-radius:8px; padding:10px 12px; margin-bottom:14px; background:var(--surface-1);">
+      <div style="font-size:9.5px; font-weight:700; color:var(--text-muted); letter-spacing:0.5px; margin-bottom:6px;">SEQUENCE (mini Gantt — read-only, edit dates/relations in the cards below)</div>
+      ${ganttRows}
+    </div>`;
+  }
+  const cardsHtml = subs.map((st,si) => {
+    const planned = `${fmtD(dateAt(st.start))} → ${fmtD(dateAt(st.end))}`;
+    return `<div style="border:0.5px solid var(--border-strong); border-left:5px solid ${pc.light}; border-radius:10px; padding:14px 16px; margin-bottom:12px; background:var(--surface-1);">
+      <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:12px;">
+        <span style="font-size:13px; font-weight:700; color:var(--gold); flex-shrink:0;">${taskNumber(drilldownKind,drilldownIdx,si)}</span>
+        <input type="text" value="${escHtml(st.name)}" oninput="drilldownEditSub(${si},'name',this.value)" placeholder="Sub-task name" style="flex:1; min-width:200px; font-size:14px; height:34px; padding:2px 8px;">
+        <button class="iconbtn" onclick="drilldownRemoveSub(${si})" title="Remove sub-task"><i class="ti ti-trash"></i></button>
+      </div>
+      <div style="display:flex; align-items:flex-end; gap:18px; flex-wrap:wrap;">
+        <div><span style="font-size:11px; color:var(--text-muted); display:block; margin-bottom:3px;">Duration (days)</span><input type="number" min="1" value="${fmt(st.duration)}" oninput="drilldownEditSub(${si},'duration',Math.max(1,Number(this.value)||1))" style="width:70px; height:32px; font-size:13px;"></div>
+        <div><span style="font-size:11px; color:var(--text-muted); display:block; margin-bottom:3px;">Relation (any task # / #.#, e.g. 1.1FS)</span><input type="text" value="${escHtml(st.preds||'')}" onchange="drilldownEditSub(${si},'preds',this.value)" placeholder="${si===0?'phase start':'↑ above'}" style="width:110px; height:32px; font-size:13px; text-align:center;"></div>
+        <div><span style="font-size:11px; color:var(--text-muted); display:block; margin-bottom:3px;">Doer</span><input type="text" value="${escHtml(st.owner||'')}" oninput="drilldownEditSub(${si},'owner',this.value)" placeholder="Who's doing this" style="width:150px; height:32px; font-size:13px;"></div>
+        <div><span style="font-size:11px; color:var(--text-muted); display:block; margin-bottom:3px;">% complete</span><input type="number" min="0" max="100" value="${fmt(st.pct||0)}" oninput="drilldownEditSub(${si},'pct',Math.max(0,Math.min(100,Number(this.value)||0)))" style="width:64px; height:32px; font-size:13px;"></div>
+        <div><span style="font-size:11px; color:var(--text-muted); display:block; margin-bottom:3px;">Actual finish</span><input type="date" value="${st.adate||''}" onchange="drilldownEditSub(${si},'adate',this.value)" style="height:32px; font-size:13px;"></div>
+        <div><span style="font-size:11px; color:var(--text-muted); display:block; margin-bottom:3px;">Planned</span><span style="font-size:12.5px; color:var(--text-secondary);">${planned}</span></div>
+      </div>
+    </div>`;
+  }).join('');
+  card.innerHTML = `
+    <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:6px; gap:10px;">
+      <div>
+        <p style="font-size:10.5px; font-weight:700; color:var(--gold); letter-spacing:0.5px; margin:0 0 2px;">PHASE DETAIL</p>
+        <h3 style="margin:0; font-size:17px;">${escHtml(t.name)}</h3>
+        <p style="margin:4px 0 0; font-size:11.5px; color:var(--text-secondary);">${subs.length} sub-task(s) · ${fmtD(dateAt(t.start))} → ${fmtD(dateAt(t.end))}</p>
+        ${t.blockId ? `<p style="margin:6px 0 0; font-size:11px; color:var(--gold); font-weight:600;"><i class="ti ti-link" style="font-size:12px; vertical-align:-1px;"></i> Linked block — changes to duration/%/doer/sub-tasks can be pulled from the other linked phase (names stay independent)</p>` : ''}
+      </div>
+      <div style="display:flex; gap:6px; flex-shrink:0;">
+        <button onclick="copyPhase('${drilldownKind}',${drilldownIdx})" title="Duplicate this phase, optionally linked to this one" style="font-size:11.5px; padding:5px 10px;"><i class="ti ti-copy" style="font-size:13px; vertical-align:-2px; margin-right:4px;"></i>Copy phase</button>
+        ${t.blockId ? `<button onclick="syncPhaseFromBlock('${drilldownKind}',${drilldownIdx})" title="Pull the latest duration/%/doer/sub-task values from the other linked phase — names stay as they are" style="font-size:11.5px; padding:5px 10px;"><i class="ti ti-refresh" style="font-size:13px; vertical-align:-2px; margin-right:4px;"></i>Sync from block</button>` : ''}
+        <button onclick="closePhaseDrilldownAndViewGantt()" title="Close and jump to this phase in the Gantt chart, to see these edits reflected there" style="font-size:11.5px; padding:5px 10px;"><i class="ti ti-chart-gantt" style="font-size:13px; vertical-align:-2px; margin-right:4px;"></i>View in Gantt</button>
+        <button class="iconbtn" onclick="closePhaseDrilldown()" title="Close" style="width:30px; height:30px; flex-shrink:0;"><i class="ti ti-x" style="font-size:15px;"></i></button>
+      </div>
+    </div>
+    <p style="font-size:11px; color:var(--text-muted); margin:8px 0 14px;">The predecessor box accepts any task or sub-task # in the whole project (e.g. "1.1FS"), not just ones inside this phase.</p>
+    ${ganttHtml}
+    <div>${cardsHtml || '<p style="font-size:12px; color:var(--text-muted);">No sub-tasks yet — add one below.</p>'}</div>
+    <button onclick="drilldownAddSub()" style="margin-top:6px; font-size:12px; padding:6px 12px;"><i class="ti ti-plus" style="font-size:13px; vertical-align:-2px; margin-right:4px;"></i>Add sub-task</button>
+  `;
+}
+
+function drilldownEditSub(si, field, value){
+  const t = drilldownParent();
+  if(!t || !t.subtasks || !t.subtasks[si]) return;
+  t.subtasks[si][field] = value;
+  update();
+  renderPhaseDrilldown();
+}
+function drilldownAddSub(){
+  const t = drilldownParent();
+  if(!t) return;
+  if(!t.subtasks) t.subtasks = [];
+  t.subtasks.push(newTask('New sub-task', 3, 0));
+  t.expanded = true;
+  update();
+  renderPhaseDrilldown();
+}
+function drilldownRemoveSub(si){
+  const t = drilldownParent();
+  if(!t || !t.subtasks) return;
+  t.subtasks.splice(si,1);
+  update();
+  renderPhaseDrilldown();
+}
+// duplicates a whole phase (name + every sub-task) and inserts the copy right after the
+// original. If linked, both phases share a `blockId` — see syncPhaseFromBlock() below for what
+// that actually does. Deliberately a MANUAL, explicit sync (a button you press) rather than
+// automatic live syncing on every edit: automatic two-way sync across every input in the app
+// would mean touching dozens of separate edit points, each a chance to introduce a subtle bug —
+// a manual "pull the latest values" action gets the same practical outcome far more safely.
+function copyPhase(kind, i){
+  const original = kind==='crit' ? criticalTasks[i] : (feedingChains[i] ? feedingChains[i].tasks[0] : null);
+  if(!original) return;
+  const clone = JSON.parse(JSON.stringify(original));
+  clone.name = original.name + ' (copy)';
+  clone.origAddr = null; // let it pick up its own "was X" tag fresh, at its own new position
+  const linkThem = confirm('Link this copy to the original phase?\n\nLinked phases can be kept in sync via a "Sync from block" button (duration, %, doer, and sub-task structure) — names always stay independent, on both phases.\n\nOK = link them.  Cancel = make a fully independent copy.');
+  if(linkThem){
+    if(!original.blockId) original.blockId = 'block_' + Date.now() + '_' + Math.random().toString(36).slice(2,7);
+    clone.blockId = original.blockId;
+  } else {
+    clone.blockId = null;
+  }
+  if(kind==='crit'){
+    criticalTasks.splice(i+1, 0, clone);
+  } else {
+    feedingChains.splice(i+1, 0, {mergeIndex:0, tasks:[clone]});
+  }
+  closePhaseDrilldown();
+  scrollToNewRow(kind, i+1);
+}
+// pulls duration/buffer/doer/%/predecessor values from whichever OTHER phase shares this one's
+// blockId — sub-task NAMES are the one thing deliberately left alone (kept exactly as this phase
+// already has them, or the source's name if this phase doesn't have a sub-task at that position
+// yet), matching what was asked for: everything syncs except naming.
+function syncPhaseFromBlock(kind, i){
+  const t = kind==='crit' ? criticalTasks[i] : (feedingChains[i] ? feedingChains[i].tasks[0] : null);
+  if(!t || !t.blockId) return;
+  const source = allTopLevelTasks().find(x => x!==t && x.blockId===t.blockId);
+  if(!source){ alert('No other phase is linked to this one anymore — nothing to sync from.'); return; }
+  t.buffer = source.buffer;
+  t.owner = source.owner;
+  const srcSubs = source.subtasks || [];
+  const myOwnName = si => (t.subtasks && t.subtasks[si]) ? t.subtasks[si].name : null;
+  t.subtasks = srcSubs.map((ss,si) => {
+    const clone = JSON.parse(JSON.stringify(ss));
+    const existing = myOwnName(si);
+    clone.name = (existing!==null && existing!==undefined) ? existing : ss.name;
+    return clone;
+  });
+  update();
+  renderPhaseDrilldown();
+}
 // drag a bar left/right on the Gantt chart to pin an exact start day, bypassing predecessor/
 // buffer scheduling for that one task — only wired onto leaf bars (bare tasks + every sub-task;
 // phase rollup bars aren't draggable since their position is always derived from their children).
 // A short drag threshold (3px) avoids hijacking a plain click intended for something else layered
 // under the bar.
+// ---------------- Task list column widths (drag a header's right edge to resize) ----------------
+// remembered for the rest of this session (not saved to the Sheet — purely a personal viewing
+// preference) so a resized column stays that width across every table rebuild until the page is
+// reloaded, rather than snapping back to its natural size on the next edit.
+let taskListColWidths = {};
+function applyTaskListColWidths(){
+  const table = document.getElementById('list-table');
+  if(!table) return;
+  Object.keys(taskListColWidths).forEach(col => {
+    const px = taskListColWidths[col];
+    table.querySelectorAll(`[data-col="${col}"]`).forEach(th => { th.style.width = px+'px'; th.style.minWidth = px+'px'; th.style.maxWidth = px+'px'; });
+    // every <td> at this column position in the body — <th> only controls the header cell itself,
+    // the body cells need the same explicit width or the column can still be pulled wide by
+    // whatever its longest cell content happens to be.
+    const rows = document.querySelectorAll('#lrows tr');
+    rows.forEach(row => {
+      const cell = row.children[Number(col)];
+      if(cell){ cell.style.width = px+'px'; cell.style.minWidth = px+'px'; cell.style.maxWidth = px+'px'; }
+    });
+  });
+}
+function attachColumnResize(){
+  document.querySelectorAll('.col-resize-handle').forEach(handle => {
+    handle.onpointerdown = function(ev){
+      ev.preventDefault(); ev.stopPropagation();
+      const th = handle.closest('th');
+      if(!th) return;
+      const col = th.getAttribute('data-col');
+      const startX = ev.clientX;
+      const startWidth = th.getBoundingClientRect().width;
+      handle.setPointerCapture(ev.pointerId);
+      const onMove = function(mv){
+        const newWidth = Math.max(40, Math.round(startWidth + (mv.clientX - startX)));
+        taskListColWidths[col] = newWidth;
+        applyTaskListColWidths();
+      };
+      const onUp = function(){
+        handle.removeEventListener('pointermove', onMove);
+        handle.removeEventListener('pointerup', onUp);
+      };
+      handle.addEventListener('pointermove', onMove);
+      handle.addEventListener('pointerup', onUp, {once:true});
+    };
+  });
+}
 function attachDragHandles(){
   document.querySelectorAll('.drag-bar').forEach(el => {
     el.onpointerdown = function(ev){
@@ -2670,6 +3075,7 @@ function clearManualStart(kind, i, si){
 }
 
 function createAll(){
+  ensureTaskIds();
   schedule();
   let g = '';
   const placedMilestones = new Set();
@@ -2717,13 +3123,19 @@ function createAll(){
     const path = taskPath(kind, i, null);
     const sub = hasSub(t);
     const chev = sub ? `<button class="iconbtn" onclick="toggleExpand('${kind}',${i})" title="${t.expanded?'Collapse this phase back into its rollup bar':'Expand this phase into its sub-tasks'}" style="width:18px; height:18px; flex-shrink:0; border:0.5px solid var(--border-strong);"><i class="ti ti-chevron-${t.expanded?'down':'right'}" style="font-size:11px;"></i></button>` : `<span class="chev"></span>`;
-    const nameCell = `${chev}${inpTextName(t.name, `${path}.name=this.value; update();`, sub?126:150, sub)}${sub?` <span class="phase-badge">PHASE · ${t.subtasks.length}</span>`:''}`;
+    const nameCell = `<div style="display:flex; align-items:center; gap:4px; min-width:0; overflow:hidden;">${chev}${inpTextName(t.name, `${path}.name=this.value; update();`, sub?126:150, sub, true)}${sub?` <span class="phase-badge" style="cursor:pointer; flex-shrink:0;" onclick="openPhaseDrilldown('${kind}',${i})" title="Open this phase's full detail view — edit sub-tasks, relations, and see its mini-Gantt">PHASE · ${t.subtasks.length} <i class="ti ti-arrows-diagonal" style="font-size:9px; vertical-align:-1px;"></i></span> ${iconBtn('list-tree', `addSubtaskFromList('${kind}',${i})`, 'Add sub-task')}`:''}</div>`;
     const durCell = sub ? roSpan('ldur-'+kind+'-'+i, fmt(t.duration), true) : inpDur(t.duration, `${path}.duration=Math.max(1,Number(this.value)||1); update();`, 50);
     const adateCell = sub ? `<span id="ladate-${kind}-${i}" style="font-size:11px; font-style:italic; color:var(--text-secondary);"></span>` : inpDate(t.adate, `${path}.adate=this.value; update();`, 116);
     const planCell = sub ? roSpan('lplan-'+kind+'-'+i, (Number(t.plan)||0).toLocaleString('en-IN'), true) : inpBud(t.plan, `${path}.plan=this.value===''?'':(Number(this.value)||0); update();`, 56);
     const actCell = sub ? roSpan('lact-'+kind+'-'+i, t.act===''?'—':(Number(t.act)||0).toLocaleString('en-IN'), true) : inpBud(t.act, `${path}.act=this.value===''?'':(Number(this.value)||0); update();`, 56);
     const relTxt = sub ? '' : `<span id="lrel-${kind}-${i}" title="Predecessor task #(s) + relation — e.g. 2FS,3SS. Edit in the Gantt tab.">${predsLabelText(kind,i,t)}</span>`;
     const pctCell = sub ? roSpan('lpct-'+kind+'-'+i, fmt(t.pct||0)+'%', true) : inpPct(t.pct, path, 46)+'%';
+    const plannedStartCell = sub
+      ? `<span id="lpd-${kind}-${i}" style="color:var(--text-secondary);"></span>`
+      : `<input type="date" id="lpd-${kind}-${i}" value="${fmtISO(dateAt(t.start))}" onchange="${path}.manualStart=dayFromDateStr(this.value); update();" title="Set an exact start date — same as dragging this task's bar in the Gantt tab. Leave the predecessor box (Gantt tab) to go back to automatic scheduling." style="height:24px; font-size:10px; width:112px;">`;
+    const plannedFinishCell = sub
+      ? `<span id="lpf-${kind}-${i}" style="color:var(--text-secondary);"></span>`
+      : `<input type="date" id="lpf-${kind}-${i}" value="${fmtISO(dateAt(t.end))}" onchange="${path}.duration=Math.max(1,(dayFromDateStr(this.value)||0)-(${path}.start||0)); update();" title="Set an exact finish date — adjusts this task's duration to land on it" style="height:24px; font-size:10px; width:112px;">`;
     const linkCell = `<div style="display:flex; align-items:center; gap:4px;">${inpText(t.link, `${path}.link=this.value;`, 150)}<button class="iconbtn" onclick="openLink(${path})" title="Open link"><i class="ti ti-external-link"></i></button></div>`;
     const vendorCell = `<input type="text" list="vendor-suggestions" value="${String(t.vendor||'').replace(/"/g,'&quot;')}" oninput="${path}.vendor=this.value; scheduleAutoSync();" placeholder="Vendor" title="Who to follow up with for this task" style="width:130px; font-size:11.5px; height:24px;">`;
     const doerCell = `<input type="text" value="${String(t.owner||'').replace(/"/g,'&quot;')}" oninput="${path}.owner=this.value; update();" placeholder="Doer" title="Who's doing this task" style="width:120px; font-size:11.5px; height:24px;">`;
@@ -2743,7 +3155,7 @@ function createAll(){
           <button class="iconbtn" style="padding:0; width:14px; height:11px; line-height:9px; opacity:${i===arrLen-1?'0.25':'1'};" onclick="${moveFn}(${i},${i+1})" title="Move task down" ${i===arrLen-1?'disabled':''}><i class="ti ti-chevron-down" style="font-size:10px;"></i></button>
         </span>
       </div>`;
-    return `<tr draggable="true" ondragstart="dragStartRow('${kind}',${i},null,event)" ondrag="updateDragGhost(event)" ondragend="endDragGhost()" ondragover="dragOverRow(event)" ondrop="dropRow('${kind}',${i})">
+    return `<tr id="lrow-${kind}-${i}" draggable="true" ondragstart="dragStartRow('${kind}',${i},null,event)" ondrag="updateDragGhost(event)" ondragend="endDragGhost()" ondragover="dragOverRow(event)" ondrop="dropRow('${kind}',${i})">
       <td style="color:var(--gold); font-weight:700;">${numCell}</td>
       <td class="l">${nameCell}</td>
       <td class="l" style="padding-left:8px;">${doerCell}</td>
@@ -2754,8 +3166,8 @@ function createAll(){
       <td>${bufCell}</td>
       <td>${durCell}</td>
       <td>${pctCell}</td>
-      <td id="lpd-${kind}-${i}" style="color:var(--text-secondary);"></td>
-      <td id="lpf-${kind}-${i}" style="color:var(--text-secondary);"></td>
+      <td>${plannedStartCell}</td>
+      <td>${plannedFinishCell}</td>
       <td class="l" style="padding-left:8px;">${adateCell}</td>
       <td id="ldl-${kind}-${i}"></td>
       <td class="col-budget">${planCell}</td>
@@ -2768,6 +3180,15 @@ function createAll(){
   }
   function listSubRow(kind, i, si, st){
     const path = taskPath(kind, i, si);
+    const parentTask = kind==='crit' ? criticalTasks[i] : feedingChains[i].tasks[0];
+    const subLen = parentTask && parentTask.subtasks ? parentTask.subtasks.length : 1;
+    const subNumCell = `<div style="display:flex; align-items:center; gap:2px;">
+        <span>${numberDisplayHtml(st, taskNumber(kind,i,si))}</span>
+        <span style="display:flex; flex-direction:column; margin-left:2px;">
+          <button class="iconbtn" style="padding:0; width:14px; height:11px; line-height:9px; opacity:${si===0?'0.25':'1'};" onclick="reorderSubtask('${kind}',${i},${si},${si-1})" title="Move sub-task up" ${si===0?'disabled':''}><i class="ti ti-chevron-up" style="font-size:10px;"></i></button>
+          <button class="iconbtn" style="padding:0; width:14px; height:11px; line-height:9px; opacity:${si===subLen-1?'0.25':'1'};" onclick="reorderSubtask('${kind}',${i},${si},${si+1})" title="Move sub-task down" ${si===subLen-1?'disabled':''}><i class="ti ti-chevron-down" style="font-size:10px;"></i></button>
+        </span>
+      </div>`;
     const linkCell = `<div style="display:flex; align-items:center; gap:4px;">${inpText(st.link, `${path}.link=this.value;`, 150)}<button class="iconbtn" onclick="openLink(${path})" title="Open link"><i class="ti ti-external-link"></i></button></div>`;
     const vendorCell = `<input type="text" list="vendor-suggestions" value="${String(st.vendor||'').replace(/"/g,'&quot;')}" oninput="${path}.vendor=this.value; scheduleAutoSync();" placeholder="Vendor" title="Who to follow up with for this task" style="width:130px; font-size:11.5px; height:24px;">`;
     const doerCell = `<input type="text" value="${String(st.owner||'').replace(/"/g,'&quot;')}" oninput="${path}.owner=this.value; update();" placeholder="Doer" title="Who's doing this task" style="width:120px; font-size:11.5px; height:24px;">`;
@@ -2777,9 +3198,9 @@ function createAll(){
     const bufCell = kind==='feed'
       ? inpBud(st.buffer||0, `${path}.buffer=this.value===''?0:(Number(this.value)||0); update();`, 50)
       : `<span style="color:var(--text-muted);">—</span>`;
-    return `<tr draggable="true" ondragstart="dragStartRow('${kind}',${i},${si},event)" ondrag="updateDragGhost(event)" ondragend="endDragGhost()" ondragover="dragOverRow(event)" ondrop="dropRow('${kind}',${i},${si})" style="background:rgba(176,141,62,0.04);">
-      <td style="color:var(--gold); font-weight:600; font-size:11px;">${numberDisplayHtml(st, taskNumber(kind,i,si))}</td>
-      <td class="l" style="padding-left:20px;">${inpText(st.name, `${path}.name=this.value; update();`, 126)}</td>
+    return `<tr id="lrow-${kind}-${i}-s-${si}" draggable="true" ondragstart="dragStartRow('${kind}',${i},${si},event)" ondrag="updateDragGhost(event)" ondragend="endDragGhost()" ondragover="dragOverRow(event)" ondrop="dropRow('${kind}',${i},${si})" style="background:rgba(176,141,62,0.04);">
+      <td style="color:var(--gold); font-weight:600; font-size:11px;">${subNumCell}</td>
+      <td class="l" style="padding-left:20px;"><input type="text" value="${String(st.name).replace(/"/g,'&quot;')}" oninput="${path}.name=this.value; update(); scheduleAutoSync();" style="width:100%; box-sizing:border-box; min-width:60px; font-size:11.5px; height:24px;"></td>
       <td class="l" style="padding-left:8px;">${doerCell}</td>
       <td class="l"><span style="font-size:10px; color:var(--text-muted);">sub-task</span></td>
       <td class="l" style="color:var(--text-muted); font-size:11px;">${predsSummaryNamesSub(si,st)}</td>
@@ -2788,8 +3209,8 @@ function createAll(){
       <td>${bufCell}</td>
       <td>${inpDur(st.duration, `${path}.duration=Math.max(1,Number(this.value)||1); update();`, 50)}</td>
       <td>${inpPct(st.pct, path, 46)}%</td>
-      <td id="lpd-${kind}-${i}-s-${si}" style="color:var(--text-secondary);"></td>
-      <td id="lpf-${kind}-${i}-s-${si}" style="color:var(--text-secondary);"></td>
+      <td><input type="date" id="lpd-${kind}-${i}-s-${si}" value="${fmtISO(dateAt(st.start))}" onchange="${path}.manualStart=dayFromDateStr(this.value); update();" title="Set an exact start date — same as dragging this sub-task's bar in the Gantt tab" style="height:24px; font-size:10px; width:112px;"></td>
+      <td><input type="date" id="lpf-${kind}-${i}-s-${si}" value="${fmtISO(dateAt(st.end))}" onchange="${path}.duration=Math.max(1,(dayFromDateStr(this.value)||0)-(${path}.start||0)); update();" title="Set an exact finish date — adjusts this sub-task's duration to land on it" style="height:24px; font-size:10px; width:112px;"></td>
       <td class="l" style="padding-left:8px;">${inpDate(st.adate, `${path}.adate=this.value; update();`, 116)}</td>
       <td id="ldl-${kind}-${i}-s-${si}"></td>
       <td class="col-budget">${inpBud(st.plan, `${path}.plan=this.value===''?'':(Number(this.value)||0); update();`, 56)}</td>
@@ -2837,6 +3258,8 @@ function createAll(){
     <td class="col-budget" id="tot-plan"></td><td class="col-budget" id="tot-act"></td><td class="col-budget" id="tot-var"></td><td></td><td></td><td></td>
   </tr>`;
   document.getElementById('lrows').innerHTML = l;
+  applyTaskListColWidths();
+  attachColumnResize();
 
   renderVendorRows();
   renderTeamRows();
@@ -2902,6 +3325,7 @@ async function loadRawStateChunked_(name){
   const metaUrl = syncUrl + (syncUrl.includes('?') ? '&' : '?') + 'action=load_meta&project=' + encodeURIComponent(name) + '&_ts=' + Date.now();
   const meta_ = await fetchJsonRetry_(metaUrl);
   if(!meta_ || !meta_.ok) return meta_ || {ok:false, error:'Could not reach the server'};
+  lastKnownSyncedAt = meta_.syncedAt || null;
   const chunkCount = Number(meta_.chunkCount)||0;
   if(chunkCount<1) return {ok:true, rawState:''};
   const parts = new Array(chunkCount);
@@ -2937,6 +3361,7 @@ async function autoPullLatest(){
       createAll();
       suppressSnapshot = false;
       resetHistory();
+      lastUnitsPullTs = ''; seedUnitSnapshots(); // v3 — this fresh load is our new baseline for the live field-sync loop
       saveLocal(); // keep this browser's backup in sync with what was just pulled
       renderSyncStatus('Loaded latest data for "'+meta.name+'" from the Sheet');
     }
@@ -2954,6 +3379,27 @@ async function reloadFromSheet(){
   if(!meta.name || !meta.name.trim()){ renderSyncStatus('Set a Project name first', true); return; }
   if(!confirm('Reload "'+meta.name+'" from the Google Sheet? This replaces everything currently on screen (and this browser\'s local backup) with whatever is saved in the Sheet.')) return;
   renderSyncStatus('Reloading from Sheet…');
+  await autoPullLatest();
+}
+// undoes the most recent SAVE on the Sheet (not this tab's own unsaved edits) — restores
+// whatever was in _data right before the last successful write, one step back. See
+// backupCurrentData_() in Code.gs: every write snapshots the previous version first, specifically
+// so this is always available as a quick recovery option.
+async function restoreBackup(){
+  if(!syncUrl){ renderSyncStatus('Paste the Web App URL first', true); return; }
+  if(!meta.name || !meta.name.trim()){ renderSyncStatus('Set a Project name first', true); return; }
+  renderSyncStatus('Checking for a backup…');
+  const metaUrl = syncUrl + (syncUrl.includes('?') ? '&' : '?') + 'action=backup_meta&project=' + encodeURIComponent(meta.name) + '&_ts=' + Date.now();
+  const bMeta = await fetchJsonRetry_(metaUrl);
+  if(!bMeta || !bMeta.ok){ renderSyncStatus('Could not check for a backup: ' + (bMeta&&bMeta.error?bMeta.error:'unknown error'), true); return; }
+  if(!bMeta.hasBackup){ renderSyncStatus('No backup available for "'+meta.name+'" yet — a backup is only created once at least one save has already happened.', true); return; }
+  const whenTxt = bMeta.backupSyncedAt ? new Date(bMeta.backupSyncedAt).toLocaleString('en-IN') : 'an earlier point';
+  if(!confirm('Restore "'+meta.name+'" to how it was just BEFORE its most recent save (backed up around '+whenTxt+')?\n\nThis undoes only the very last save — replacing what\'s currently saved on the Sheet, then reloading it into this tab. Your unsaved on-screen edits (if any) will also be replaced.')) return;
+  renderSyncStatus('Restoring backup…');
+  const restoreUrl = syncUrl + (syncUrl.includes('?') ? '&' : '?') + 'action=restore_backup&project=' + encodeURIComponent(meta.name) + '&_ts=' + Date.now();
+  const rResult = await fetchJsonRetry_(restoreUrl);
+  if(!rResult || !rResult.ok){ renderSyncStatus('Restore failed: ' + (rResult&&rResult.error?rResult.error:'unknown error'), true); return; }
+  renderSyncStatus('Backup restored — reloading…');
   await autoPullLatest();
 }
 
@@ -3050,12 +3496,42 @@ function addSubtask(kind,i){
   t.expanded = true;
   createAll();
 }
+// same as addSubtask(), but for the "add sub-task" button in the Task list tab specifically —
+// scrolls straight to the new row and flashes it, the same treatment addCriticalTask()/
+// addFeedingChain() already get, since a phase can have many sub-tasks and the new one always
+// lands at the very end of that phase's own list, not necessarily near where the button was.
+function addSubtaskFromList(kind,i){
+  const t = kind==='crit' ? criticalTasks[i] : feedingChains[i].tasks[0];
+  if(!t.subtasks) t.subtasks = [];
+  t.subtasks.push(newTask('New sub-task', 3, 0));
+  t.expanded = true;
+  createAll();
+  scrollToNewRow(kind, i, t.subtasks.length-1);
+}
 function removeSubtask(kind,i,si){
   const t = kind==='crit' ? criticalTasks[i] : feedingChains[i].tasks[0];
   t.subtasks.splice(si,1);
   createAll();
 }
-function addCriticalTask(){ criticalTasks.push(newTask('New task', 5, 0)); createAll(); }
+function addCriticalTask(){ criticalTasks.push(newTask('New task', 5, 0)); createAll(); scrollToNewRow('crit', criticalTasks.length-1); }
+// switches to the Task list tab (where the new row is easiest to spot in context) and scrolls
+// straight to the newly-added task, with a brief highlight flash — added because a new task can
+// land far from wherever the person happened to be scrolled to on a long project, making it look
+// like nothing happened even though it was added correctly.
+function scrollToNewRow(kind, i, si){
+  showTab('list');
+  const targetId = (si===undefined || si===null) ? ('lrow-'+kind+'-'+i) : ('lrow-'+kind+'-'+i+'-s-'+si);
+  setTimeout(() => {
+    const el = document.getElementById(targetId);
+    if(!el) return;
+    el.scrollIntoView({behavior:'smooth', block:'center'});
+    const prevTransition = el.style.transition;
+    el.style.transition = 'background 0.4s';
+    const prevBg = el.style.background;
+    el.style.background = 'rgba(176,141,62,0.4)';
+    setTimeout(() => { el.style.background = prevBg; el.style.transition = prevTransition; }, 1600);
+  }, 60);
+}
 // snapshots every top-level task's resolved NUMBERED predecessor references (by object identity)
 // before an array mutation (delete/insert/reorder/convert). Bare/blank preds (meaning "the task
 // directly above, positionally") are recorded as null and left completely untouched by restore —
@@ -3230,6 +3706,7 @@ function addFeedingChain(){
   t.preds = criticalTasks.length + 'FS'; // defaults to starting once the last critical task finishes
   feedingChains.push({tasks:[t]});
   createAll();
+  scrollToNewRow('feed', feedingChains.length-1);
 }
 function removeFeedingChain(ci){
   const snap = capturePredObjects();
@@ -3329,6 +3806,21 @@ function reorderFeedingChain(from,to){
   restorePredObjects(snap);
   createAll();
 }
+// moves a sub-task up/down within its own phase's list — uses the generalized predecessor
+// remapper (captureAllPredRefs/restoreAllPredRefs, the same one moveTaskTo() uses) so any other
+// task's explicit cross-link pointing at this sub-task by its old dotted # (e.g. "1.3FS") gets
+// automatically rewritten to wherever it lands after the move.
+function reorderSubtask(kind, i, from, to){
+  const parent = kind==='crit' ? criticalTasks[i] : feedingChains[i].tasks[0];
+  if(!parent || !parent.subtasks) return;
+  const arr = parent.subtasks;
+  if(from===to || from<0 || to<0 || from>=arr.length || to>=arr.length) return;
+  const snap = captureAllPredRefs();
+  const [item] = arr.splice(from,1);
+  arr.splice(to,0,item);
+  restoreAllPredRefs(snap);
+  createAll();
+}
 // floating badge that follows the cursor during a Task-list row drag, showing exactly which
 // numbered task is being moved — replaces the browser's own default drag-image (which only shows
 // whatever happens to be visible/unclipped at that scroll position, and can end up cutting off
@@ -3423,6 +3915,7 @@ function resetAll(){
   confirmedProjectName = '';
   hasUnsyncedEdits = true;
   blockAutoSync = false;
+  lastKnownSyncedAt = null;
   createAll();
   suppressSnapshot = false;
   resetHistory();
@@ -3461,6 +3954,7 @@ function newProject(){
   feedingChains.forEach(fc => fc.tasks.forEach(resetProgress));
   lastSheetUrl = '';
   projectExists = false; // new/untitled project — nothing gets created until "Create project" is clicked
+  lastKnownSyncedAt = null;
   confirmedProjectName = '';
   hasUnsyncedEdits = true;
   blockAutoSync = false;
@@ -3518,7 +4012,9 @@ function buildSyncPayload(){
   const lookaheadList = lookaheadRows().rows.map(r => ({
     num: taskNumber(r.kind, r.i, r.si), name: r.t.name, type: r.type,
     startDate: fmtISO(dateAt(r.t.start)), endDate: fmtISO(dateAt(r.t.end)),
-    status: statusLabel[overallStatus(r.t)], owner: r.t.owner || '', notes: r.t.notes || ''
+    status: statusLabel[overallStatus(r.t)], owner: r.t.owner || '', notes: r.t.notes || '',
+    unit: r.t.unit || '', plannedQty: r.t.plannedQty===undefined?'':r.t.plannedQty, actualQty: r.t.actualQty===undefined?'':r.t.actualQty,
+    actualFinish: r.t.adate || ''
   }));
   // mirrors the "Daily follow-up" tab for the tool's currently-set daily.date.
   const today_ = new Date(); today_.setHours(0,0,0,0);
@@ -3587,6 +4083,12 @@ function renderSyncStatus(msg, isErr){
 // that only happens via an explicit "Create project" click.
 function scheduleAutoSync(){
   hasUnsyncedEdits = true;
+  scheduleLocalSave(); // ALWAYS keep this browser's own backup current, independent of whether
+  // the server sync below is even allowed to run right now — this is what was missing for many
+  // fields (Client, Location, Doer, Notes, Vendor, milestone owner, the Daily follow-up link
+  // boxes, and others) that only ever called scheduleAutoSync() without also calling update()
+  // (which is where scheduleLocalSave() used to be triggered from) — meaning a tab closed before
+  // the debounced server sync fired could lose that edit entirely, with no local copy either.
   if(blockAutoSync) return;
   if(!autoSync || !projectExists || !syncUrl || !meta.name || !meta.name.trim()) return;
   clearTimeout(syncTimer);
@@ -3607,7 +4109,44 @@ let lastSheetUrl = '';
 // been reliable in testing even where POST fetches weren't. If that confirmation GET itself fails,
 // the data was still very likely delivered (the form submission doesn't depend on it), so we show
 // an honest "sent but unconfirmed" status rather than a false failure.
-function submitViaHiddenForm_(payloadStr){
+// v3.1 fix: this used to be two SEPARATE hidden iframe/form pairs (one for the full-project
+// sync, one for the smaller/frequent unit/team/claim pushes) so a slow full sync would never
+// block a quick one. In practice, when this page is hosted directly from the Apps Script /exec
+// URL (HtmlService wraps the whole page in its own sandboxed iframe already), having a SECOND
+// independent iframe/form pair submitting to that same URL triggered Apps Script's own internal
+// sandboxing machinery to throw ("onLoad is not defined", 403s on its internal echo/proxy
+// resources) — a hosting-environment quirk, not something under this file's control. The fix is
+// to go back to ONE shared iframe/form, and instead serialize every submission through a small
+// queue so concurrent callers (the periodic safety net, the unit-sync tick, a manual "Sync now")
+// still never collide — each just waits its turn for the shared channel.
+//
+// v3.1 second fix: even a single shared iframe/form still hit the SAME underlying problem when
+// this page is served directly from the Apps Script /exec URL itself (as opposed to hosted
+// externally, e.g. on GitHub Pages) — Apps Script serves HtmlService pages by proxying them
+// through script.googleusercontent.com/macros/echo?..., and a hidden iframe/form navigating BACK
+// to that same /exec URL gets entangled with that same proxy and blocked (403s, "onLoad is not
+// defined" — visible in the browser console). The hidden-form technique exists ONLY to work
+// around fetch() being unreliable across a CROSS-origin boundary (e.g. a GitHub-Pages-hosted copy
+// of this tool talking to a separately-hosted script.google.com backend); when the page and the
+// sync target are the SAME origin — which is exactly true whenever someone opens this tool via
+// its own /exec URL, as syncUrl's own initializer below already detects — a plain fetch() POST
+// has no cross-origin boundary to cross at all, so it just works, with none of the proxy
+// entanglement. isSameOriginSync_() below decides which path to take; the iframe/form technique
+// remains the fallback for a genuinely externally-hosted copy of this tool.
+function isSameOriginSync_(){
+  try {
+    return typeof window !== 'undefined' && window.location && syncUrl &&
+      window.location.href.indexOf('script.google.com') >= 0 && String(syncUrl).indexOf('script.google.com') >= 0;
+  } catch(e){ return false; }
+}
+let hiddenFormQueue_ = Promise.resolve();
+async function submitViaHiddenFormRaw_(payloadStr){
+  if(isSameOriginSync_()){
+    try {
+      await fetch(syncUrl, {method:'POST', body: new URLSearchParams({payload: payloadStr}), cache:'no-store'});
+    } catch(fetchErr){ /* best-effort, matches this whole channel's existing fire-and-mostly-trust behavior — callers already treat completion (not a guaranteed server-side success) as "sent" */ }
+    return;
+  }
   return new Promise((resolve) => {
     const form = document.getElementById('sync-form');
     const iframe = document.querySelector('iframe[name="sync-frame"]');
@@ -3629,6 +4168,302 @@ function submitViaHiddenForm_(payloadStr){
     form.submit();
   });
 }
+function submitViaHiddenForm_(payloadStr){
+  hiddenFormQueue_ = hiddenFormQueue_.then(() => submitViaHiddenFormRaw_(payloadStr));
+  return hiddenFormQueue_;
+}
+// v3 — units/claims/team pushes now go through the exact same queued channel above (see the
+// comment there for why); kept as separate function NAMES only so every existing call site
+// elsewhere in this file didn't need to change.
+function submitUnitsViaHiddenForm_(payloadStr){
+  return submitViaHiddenForm_(payloadStr);
+}
+// v3 — every top-level task (critical or feeding) needs its own stable id for the unit-sync
+// system to address it. Tasks created via newTask() already get one; this backfills any that
+// don't (tasks loaded from an older save file, or from a Sheet that predates this feature) so
+// the whole tree always has ids before the sync loop's next tick runs. Called from createAll()
+// on every load/rebuild — cheap no-op once every task already has an id.
+function ensureTaskIds(){
+  allTopLevelTasks().forEach(t => { if(!t.id) t.id = genId(); });
+}
+// v3 — the full list of "units" the live-sync loop tracks: every top-level task (by its own id,
+// subtasks travel along inside their parent's JSON — see the design note on unitsPushPullTick),
+// plus three fixed pseudo-units covering everything else that isn't a task: project meta/team,
+// milestones, and vendor payments.
+function collectUnits(){
+  const units = allTopLevelTasks().map(t => ({id: t.id, obj: t}));
+  units.push({id: '__meta__', obj: meta});
+  units.push({id: '__milestones__', obj: milestones});
+  units.push({id: '__vendorPayments__', obj: vendorPayments});
+  return units;
+}
+// v3 — marks every current unit as "already in sync with the server" WITHOUT pushing anything.
+// Call this right after any full load (page load restore, autoPullLatest, onProjectPicked,
+// resetAll, newProject, importJSON, restoreState) — at that moment the full blob already reflects
+// this exact state server-side, so treating every unit as freshly "dirty" and pushing it all again
+// would just be wasted, redundant writes. The very next unitsPushPullTick() will only push
+// whatever changes from THIS baseline onward.
+function seedUnitSnapshots(){
+  unitSnapshots = {};
+  collectUnits().forEach(u => { unitSnapshots[u.id] = JSON.stringify(u.obj); });
+  taskListRowSnapshot = {};
+  allTopLevelTasks().concat(allTopLevelTasks().flatMap(t => t.subtasks||[])).forEach(t => {
+    if(t.id) taskListRowSnapshot[t.id] = JSON.stringify(taskListEditableTuple(t));
+  });
+  teamRowSnapshot = {};
+  if(meta.team){
+    teamRoles.forEach(([k]) => { if(meta.team[k]) teamRowSnapshot[k] = JSON.stringify({name: meta.team[k].name||'', phone: meta.team[k].phone||''}); });
+  }
+}
+// v3 — the periodic tick (see the setInterval near the bottom of this file) that makes multiple
+// people editing the SAME project feel close to real-time, without touching the structural
+// (add/remove/reorder task, switch project) flow at all:
+//   1. PUSH: compare every unit's current JSON against unitSnapshots (what the server last knew);
+//      whatever differs is "dirty" and gets pushed together, in one small request.
+//   2. PULL: ask the server for every unit any session has changed since our last pull; apply any
+//      that differ from what we already have, then re-render once if anything was applied.
+// Two people editing DIFFERENT tasks (or different fields of different tasks) never conflict —
+// each top-level task is its own row server-side. Two people editing the SAME task at the same
+// moment: whoever's push lands last wins for that whole task (not blocked, just simple
+// last-write-wins) — a deliberate, simple middle ground for Stage 1.
+async function unitsPushPullTick(){
+  if(typeof document!=='undefined' && document.visibilityState==='hidden') return; // background tab — don't fight an active tab with stale memory
+  if(!projectExists || !syncUrl || !meta.name || !meta.name.trim() || blockAutoSync) return;
+  if(unitsTickInFlight) return;
+  unitsTickInFlight = true;
+  try {
+    ensureTaskIds();
+    const units = collectUnits();
+    const dirty = [];
+    units.forEach(u => {
+      const json = JSON.stringify(u.obj);
+      if(unitSnapshots[u.id] !== json) dirty.push({id: u.id, json});
+    });
+    if(dirty.length){
+      try {
+        await submitUnitsViaHiddenForm_(JSON.stringify({kind:'units_push', project: meta.name, units: dirty}));
+        dirty.forEach(d => { unitSnapshots[d.id] = d.json; });
+      } catch(pushErr){ /* next tick will see the same units still dirty and retry naturally */ }
+    }
+    try {
+      const url = syncUrl + (syncUrl.includes('?') ? '&' : '?') + 'action=pull_units&project=' + encodeURIComponent(meta.name) + '&since=' + encodeURIComponent(lastUnitsPullTs) + '&_ts=' + Date.now();
+      const res = await fetch(url, {cache:'no-store'});
+      const data = await res.json();
+      if(data && data.ok){
+        let applied = false;
+        (data.units || []).forEach(u => {
+          if(unitSnapshots[u.id] === u.json) return; // this is just an echo of something WE pushed — nothing new to apply
+          if(u.id === '__meta__'){ try { meta = JSON.parse(u.json); applied = true; } catch(e){} }
+          else if(u.id === '__milestones__'){ try { milestones = JSON.parse(u.json); applied = true; } catch(e){} }
+          else if(u.id === '__vendorPayments__'){ try { vendorPayments = JSON.parse(u.json); applied = true; } catch(e){} }
+          else {
+            const target = allTopLevelTasks().find(t => t.id === u.id);
+            if(target){ try { Object.assign(target, JSON.parse(u.json)); applied = true; } catch(e){} }
+            // an id we don't recognize locally = a task added/removed structurally elsewhere —
+            // deliberately left alone here (Stage 1 scope); it'll show up on the next full reload
+            // / "Switch project" / "Reload from Sheet", same as before this feature existed.
+          }
+          unitSnapshots[u.id] = u.json;
+        });
+        lastUnitsPullTs = data.serverNow || lastUnitsPullTs;
+        if(applied){
+          suppressSnapshot = true;
+          createAll();
+          suppressSnapshot = false;
+        }
+      }
+    } catch(pullErr){ /* silent — next tick tries again; this is a background convenience loop, not a user-facing action */ }
+  } finally {
+    unitsTickInFlight = false;
+  }
+}
+
+// v3.1 — the small set of fields Manoj can edit directly in the "Task list" tab that flow back
+// into the tool: Doer, Buffer, Duration, % done, Actual finish, Plan, Actual, Link, Vendor, QC
+// done. Deliberately EXCLUDES #, Type, Depends on, Planned start/finish, Delay, and Variance —
+// those are either derived/computed by the tool's own scheduling (Delay, Variance, and Planned
+// dates unless a manual override is set) or have structural implications too risky for a first
+// version (changing Type or Depends on can reshape the whole critical chain) — edit those inside
+// the tool itself for now.
+function taskListEditableTuple(t){
+  return {owner: t.owner||'', buffer: t.buffer||0, duration: t.duration||1, pct: t.pct||0, adate: t.adate||'', plan: t.plan===''?'':(t.plan||0), act: t.act===''?'':(t.act||0), link: t.link||'', vendor: t.vendor||'', qcDone: !!t.qcDone};
+}
+// parses one raw Sheet row (the `vals` array from pull_tasklist_rows, 19 cells, 0-indexed here)
+// into the same shape taskListEditableTuple() produces, so the two can be compared directly.
+function tasklistRowToTuple(vals){
+  const toNum = (v) => (v===''||v===null||v===undefined) ? '' : (Number(v)||0);
+  return {
+    owner: String(vals[2]||''), buffer: Number(vals[5])||0, duration: Math.max(1, Number(vals[6])||1),
+    pct: Math.max(0, Math.min(100, Number(vals[7])||0)), adate: normalizeSheetDate_(vals[10]),
+    plan: toNum(vals[12]), act: toNum(vals[13]), link: String(vals[15]||''), vendor: String(vals[16]||''),
+    qcDone: String(vals[17]||'').trim().toLowerCase()==='yes'
+  };
+}
+// Sheet date cells can come back from the API as either a JS Date object or a plain string,
+// depending on how the cell was entered — normalize both to the tool's own 'YYYY-MM-DD' format.
+function normalizeSheetDate_(v){
+  if(!v) return '';
+  if(v instanceof Date) return fmtISO(v);
+  const s = String(v).trim();
+  if(!s) return '';
+  const d = new Date(s);
+  return isNaN(d.getTime()) ? '' : fmtISO(d);
+}
+// v3.1 — same hidden-form technique as the units push, reusing the SAME units-form/units-frame
+// pair (claims are small and infrequent, so sharing that channel rather than adding a third
+// iframe is simpler and low-risk).
+function submitClaimsViaHiddenForm_(payloadStr){
+  return submitUnitsViaHiddenForm_(payloadStr);
+}
+// v3.1 — the periodic tick that makes the Task list tab a genuine two-way surface:
+//   1. Pull every current row from the Sheet.
+//   2. A row with a matching ID (column 19) = an existing task — if its editable fields differ
+//      from what we last knew, Manoj edited it in the Sheet; apply that into the live task.
+//   3. A row with NO id but a Task name filled in = a new task Manoj typed directly into the
+//      Sheet; create it locally (as a critical task, or feeding if he wrote "Feeding" in the
+//      Type column) and queue a "claim" so the backend stamps that row with the new task's id —
+//      after which it's treated as a known row from then on, not offered as "new" again.
+// New tasks/edits detected here still go out to the Sheet's own visible columns the NORMAL way,
+// through the tool's regular full-sync (writeTaskList_) — this function only needs to update the
+// tool's own in-memory model and claim the row; everything else already flows from there.
+async function taskListPullTick(){
+  if(typeof document!=='undefined' && document.visibilityState==='hidden') return;
+  if(!projectExists || !syncUrl || !meta.name || !meta.name.trim() || blockAutoSync) return;
+  if(taskListTickInFlight) return;
+  taskListTickInFlight = true;
+  try {
+    const url = syncUrl + (syncUrl.includes('?') ? '&' : '?') + 'action=pull_tasklist_rows&project=' + encodeURIComponent(meta.name) + '&_ts=' + Date.now();
+    const res = await fetch(url, {cache:'no-store'});
+    const data = await res.json();
+    if(!data || !data.ok) return;
+    let applied = false;
+    const claims = [];
+    (data.rows || []).forEach(r => {
+      const vals = r.vals || [];
+      const id = String(vals[18]||'').trim();
+      const taskName = String(vals[1]||'').trim();
+      if(id){
+        const target = allTopLevelTasks().concat(allTopLevelTasks().flatMap(t => t.subtasks||[])).find(t => t.id === id);
+        if(!target) return; // an id the tool doesn't recognize (e.g. a milestone row, or stale) — ignore
+        const tuple = tasklistRowToTuple(vals);
+        const tupleJson = JSON.stringify(tuple);
+        if(taskListRowSnapshot[id] === tupleJson) return; // matches what we already knew — nothing to apply
+        target.owner = tuple.owner; target.buffer = tuple.buffer; target.duration = tuple.duration;
+        target.pct = tuple.pct; target.adate = tuple.adate; target.plan = tuple.plan; target.act = tuple.act;
+        target.link = tuple.link; target.vendor = tuple.vendor; target.qcDone = tuple.qcDone;
+        taskListRowSnapshot[id] = tupleJson;
+        applied = true;
+      } else if(taskName && !pendingClaimRows.has(r.row)){
+        const typeText = String(vals[3]||'').trim().toLowerCase();
+        const nt = newTask(taskName, Math.max(1, Number(vals[6])||1), (vals[12]===''||vals[12]===null||vals[12]===undefined) ? 0 : (Number(vals[12])||0));
+        nt.owner = String(vals[2]||''); nt.link = String(vals[15]||''); nt.vendor = String(vals[16]||'');
+        nt.pct = Math.max(0, Math.min(100, Number(vals[7])||0));
+        nt.act = (vals[13]===''||vals[13]===null||vals[13]===undefined) ? '' : (Number(vals[13])||0);
+        nt.adate = normalizeSheetDate_(vals[10]);
+        nt.qcDone = String(vals[17]||'').trim().toLowerCase()==='yes';
+        if(typeText === 'feeding'){
+          nt.taskType = 'feeding';
+          nt.preds = criticalTasks.length + 'FS';
+          nt.buffer = Math.max(0, Number(vals[5])||0);
+          feedingChains.push({tasks:[nt]});
+        } else {
+          criticalTasks.push(nt);
+        }
+        pendingClaimRows.add(r.row);
+        claims.push({row: r.row, id: nt.id});
+        taskListRowSnapshot[nt.id] = JSON.stringify(taskListEditableTuple(nt));
+        applied = true;
+      }
+    });
+    if(claims.length){
+      try {
+        await submitClaimsViaHiddenForm_(JSON.stringify({kind:'claim_tasklist_rows', project: meta.name, claims}));
+      } catch(claimErr){ /* next tick will just try to claim again if the row still shows blank */ }
+      finally { claims.forEach(c => pendingClaimRows.delete(c.row)); }
+    }
+    // v3.1 — push any LOCAL team edits into the Sheet's visible "Project team" table too (an
+    // upsert of just the changed roles' cells, never a full clear/rewrite — see handleTeamPush_).
+    // Snapshot is only marked clean AFTER the push attempt completes, so a failed push leaves it
+    // dirty and the very next tick retries automatically, same pattern the unit-sync push uses.
+    try {
+      const dirtyTeam = {};
+      if(meta.team){
+        teamRoles.forEach(([k]) => {
+          const tuple = {name: (meta.team[k]&&meta.team[k].name)||'', phone: (meta.team[k]&&meta.team[k].phone)||''};
+          const tupleJson = JSON.stringify(tuple);
+          if(teamRowSnapshot[k] !== tupleJson) dirtyTeam[k] = {tuple, tupleJson};
+        });
+      }
+      const dirtyTeamKeys = Object.keys(dirtyTeam);
+      if(dirtyTeamKeys.length){
+        const payloadTeam = {};
+        dirtyTeamKeys.forEach(k => { payloadTeam[k] = dirtyTeam[k].tuple; });
+        try {
+          await submitClaimsViaHiddenForm_(JSON.stringify({kind:'push_team_rows', project: meta.name, team: payloadTeam}));
+          dirtyTeamKeys.forEach(k => { teamRowSnapshot[k] = dirtyTeam[k].tupleJson; });
+        } catch(teamPushErr){ /* leave snapshot dirty — next tick retries */ }
+      }
+    } catch(teamPushOuterErr){ /* silent */ }
+    // v3.1 — same tick also picks up edits to the "Project team" table on the Summary tab (a
+    // fixed, small set of roles — see teamRoles at the top of this file — so no "new row"
+    // detection is needed here, just a straight field compare-and-apply per role).
+    try {
+      const teamUrl = syncUrl + (syncUrl.includes('?') ? '&' : '?') + 'action=pull_team_rows&project=' + encodeURIComponent(meta.name) + '&_ts=' + Date.now();
+      const teamRes = await fetch(teamUrl, {cache:'no-store'});
+      const teamData = await teamRes.json();
+      if(teamData && teamData.ok){
+        const roleLabelToKey = {};
+        teamRoles.forEach(([k,label]) => { roleLabelToKey[label] = k; });
+        (teamData.rows || []).forEach(r => {
+          const key = roleLabelToKey[r.role];
+          if(!key) return;
+          const tuple = {name: r.name||'', phone: r.phone||''};
+          const tupleJson = JSON.stringify(tuple);
+          if(teamRowSnapshot[key] === tupleJson) return;
+          if(!meta.team) meta.team = emptyTeam();
+          if(!meta.team[key]) meta.team[key] = {name:'', phone:''};
+          meta.team[key].name = tuple.name;
+          meta.team[key].phone = tuple.phone;
+          teamRowSnapshot[key] = tupleJson;
+          applied = true;
+        });
+      }
+    } catch(teamErr){ /* silent — next tick retries */ }
+    if(applied){
+      suppressSnapshot = true;
+      createAll();
+      suppressSnapshot = false;
+    }
+  } catch(err){ /* silent — background convenience loop, next tick retries */ }
+  finally { taskListTickInFlight = false; }
+}
+
+// v3 — called only when the full-sync staleness guard detects the server has moved on. Pulls the
+// server's current full project state and compares just its SET of top-level task ids against
+// this tab's own — if they match exactly, the only thing that differed was ordinary field
+// content, which the live unit-sync loop has almost certainly already merged into this tab's
+// memory by now, so it's safe to let the push proceed. If the sets differ, a task was genuinely
+// added/removed/reordered on another session — that's the one case unit-sync doesn't merge, so
+// it still needs a real reload. As a side effect (via loadRawStateChunked_), this also refreshes
+// lastKnownSyncedAt to the server's current value either way.
+async function tryHealStaleness_(){
+  try {
+    const data = await loadRawStateChunked_(meta.name);
+    if(!data || !data.ok || !data.rawState) return false;
+    const remote = JSON.parse(data.rawState);
+    const remoteTasks = (remote.criticalTasks||[]).concat((remote.feedingChains||[]).map(fc => fc.tasks[0]));
+    const remoteIds = remoteTasks.map(t => t.id).filter(Boolean);
+    const localIds = allTopLevelTasks().map(t => t.id).filter(Boolean);
+    if(remoteIds.length !== localIds.length || remoteIds.length !== remoteTasks.length || localIds.length !== allTopLevelTasks().length){
+      // a length mismatch anywhere (including a task on either side still missing an id, which
+      // would mean it can't be confidently matched) — treat as structural drift, don't guess.
+      return false;
+    }
+    const remoteSet = new Set(remoteIds);
+    for(let i=0; i<localIds.length; i++){ if(!remoteSet.has(localIds[i])) return false; }
+    return true;
+  } catch(e){ return false; }
+}
 async function syncToSheet(manual, attempt){
   attempt = attempt || 1;
   if(blockAutoSync){
@@ -3637,8 +4472,57 @@ async function syncToSheet(manual, attempt){
   }
   if(!syncUrl){ if(manual) renderSyncStatus('Paste the Web App URL first', true); return false; }
   if(!meta.name || !meta.name.trim()){ if(manual) renderSyncStatus('Set a Project name first (Summary tab) — nothing is created until then', true); return false; }
-  if(syncInFlight) return false;
+  if(projectExists && criticalTasks.length===0 && feedingChains.length===0){
+    // this tab's own in-memory state has no tasks at all, yet thinks it's syncing an EXISTING
+    // project — every real project always has at least one critical task, so this can only mean
+    // this tab never actually loaded the real data (e.g. a stale/blank tab left open from before,
+    // or a failed load that silently fell through to a blank template). Refusing here is what
+    // stops a moment like this from silently overwriting a real project's data with nothing.
+    renderSyncStatus('Sync blocked — this tab has no tasks in memory for an existing project, which usually means it never actually loaded the real data. Reload the page or use "Switch project" to this name again before syncing.', true);
+    if(manual) alert('Sync blocked: this browser tab has zero tasks loaded for "'+meta.name+'", but that project already has real data saved. Syncing now would overwrite it with nothing.\n\nReload this page (or use "Switch project" to this name again) to pull the real data back in first.');
+    return false;
+  }
+  if(syncInFlight){
+    // another sync (most commonly the periodic 10-second safety net) is already running at the
+    // exact same moment — rather than failing right away (which used to surface a misleading
+    // "Not synced yet" reason, since nothing here had actually gone wrong), wait briefly for it
+    // to finish and then proceed normally. Only bail out if it's STILL busy after a real wait.
+    let waitedForSlot = 0;
+    while(syncInFlight && waitedForSlot < 8000){ await new Promise(r => setTimeout(r, 150)); waitedForSlot += 150; }
+    if(syncInFlight){
+      if(manual) renderSyncStatus('Another sync is still in progress — please try again in a moment.', true);
+      return false;
+    }
+  }
   syncInFlight = true;
+  if(projectExists){
+    try {
+      const checkUrl = syncUrl + (syncUrl.includes('?') ? '&' : '?') + 'action=load_meta&project=' + encodeURIComponent(meta.name) + '&_ts=' + Date.now();
+      const checkData = await fetchJsonRetry_(checkUrl, 1);
+      if(checkData && checkData.ok && checkData.syncedAt && checkData.syncedAt !== lastKnownSyncedAt){
+        // v3: the server's full-project record has moved on since this tab last confirmed it —
+        // could be a fresh baseline never established, OR another session (tab/device) saving.
+        // Before this used to hard-block here every time, which — now that ordinary field edits
+        // already sync live via the unit-sync loop every few seconds — was blocking far too
+        // often for no real reason (two tabs open on the same project would constantly trip this
+        // on each other's routine 10-second safety-net push). tryHealStaleness_() checks whether
+        // the drift is JUST that (safe — our in-memory tasks already match what the server has,
+        // field-for-field, thanks to unit-sync) or a genuine STRUCTURAL change (a task added,
+        // removed, or reordered elsewhere — unit-sync deliberately doesn't merge that, see its
+        // own comment) — only the structural case still needs an actual reload.
+        const healed = await tryHealStaleness_();
+        if(!healed){
+          syncInFlight = false;
+          renderSyncStatus('Sync blocked — another session added/removed/reordered task(s) in "'+meta.name+'" since this tab last loaded it. Reload (or "Switch project" to this name again) to pull those in first.', true);
+          if(manual) alert('Sync blocked: another session has added, removed, or reordered tasks in "'+meta.name+'" since this tab last loaded it.\n\n(Ordinary field edits — progress, dates, notes, budgets — already sync live every few seconds and never hit this. Only structural changes like this do.)\n\nReload this page (or use "Switch project" to this name again) to pull those in first — then redo your edit here if it\'s still needed.');
+          return false;
+        }
+        // healed === true: tryHealStaleness_() has already refreshed lastKnownSyncedAt to match
+        // the server, and confirmed the same set of top-level tasks exists on both sides — safe
+        // to proceed with the push below.
+      }
+    } catch(checkErr){ /* couldn't verify — proceed rather than block a legitimate save on a network hiccup */ }
+  }
   if(manual) renderSyncStatus(projectExists ? 'Syncing…' : 'Creating…');
   else if(attempt > 1) renderSyncStatus('Syncing… (retry ' + attempt + '/3)');
   const payload = JSON.stringify(buildSyncPayload());
@@ -3663,8 +4547,10 @@ async function syncToSheet(manual, attempt){
     confirmedProjectName = meta.name;
     hasUnsyncedEdits = false;
     blockAutoSync = false;
+    lastKnownSyncedAt = new Date().toISOString(); // approximates what the server just recorded
     lastSyncAt = new Date().toLocaleTimeString('en-IN', {hour:'2-digit', minute:'2-digit'});
     clearTimeout(fallbackRetryTimer);
+    if(!lastUnitsPullTs) seedUnitSnapshots(); // v3 — only seed if this tab hasn't already established a live-sync baseline (avoids clobbering units another session may have just pushed)
     saveLocal(); // persist projectExists=true so a reload right after this doesn't ask to "Create project" again
     renderSyncStatus('Synced ' + lastSyncAt);
     syncInFlight = false;
@@ -3734,10 +4620,21 @@ async function onProjectPicked(name){
     // before starting our own flush, instead of syncToSheet() silently no-op'ing on top of it.
     let waited = 0;
     while(syncInFlight && waited < 15000){ await new Promise(r => setTimeout(r, 200)); waited += 200; }
+    if(lastKnownSyncedAt===null){
+      // no baseline yet for the CURRENT project — establish one now so the push below doesn't
+      // get blocked by its own staleness guard with nothing to compare against.
+      try {
+        const mUrl2 = syncUrl + (syncUrl.includes('?') ? '&' : '?') + 'action=load_meta&project=' + encodeURIComponent(meta.name) + '&_ts=' + Date.now();
+        const mData2 = await fetchJsonRetry_(mUrl2, 1);
+        if(mData2 && mData2.ok) lastKnownSyncedAt = mData2.syncedAt || null;
+      } catch(e){ /* proceed regardless — syncToSheet's own check fails open on a network error too */ }
+    }
     const flushOk = await syncToSheet(false);
     if(!flushOk){
       const sel = document.getElementById('project-list'); if(sel) sel.value = meta.name || '';
-      alert('Could not save "'+meta.name+'" before switching (connection/sync issue) — staying on this project so nothing is lost. Check your internet connection and try "Sync now" manually, then switch again once it shows "Synced".');
+      const statusNow = document.getElementById('sync-status');
+      const actualReason = statusNow && statusNow.textContent && statusNow.textContent.trim() ? statusNow.textContent.trim() : 'a connection/sync issue';
+      alert('Could not save "'+meta.name+'" before switching — staying on this project so nothing is lost.\n\nReason: '+actualReason);
       if(statusEl){ statusEl.textContent = 'Switch cancelled — could not save current project first'; statusEl.style.color = 'var(--red)'; }
       return;
     }
@@ -3778,6 +4675,7 @@ async function onProjectPicked(name){
         createAll();
         suppressSnapshot = false;
         resetHistory();
+        lastUnitsPullTs = ''; seedUnitSnapshots();
         if(statusEl){ statusEl.textContent = 'Loaded ' + name; statusEl.style.color = 'var(--green)'; }
         return;
       }
@@ -3840,6 +4738,7 @@ async function onProjectPicked(name){
     createAll();
     suppressSnapshot = false;
     resetHistory();
+    lastUnitsPullTs = ''; seedUnitSnapshots();
     if(statusEl){ statusEl.textContent = 'Loaded ' + name; statusEl.style.color = 'var(--green)'; }
   } catch(err){
     if(statusEl){ statusEl.textContent = 'Load failed — see popup'; statusEl.style.color = 'var(--red)'; }
@@ -3892,6 +4791,7 @@ function importJSON(evt){
             else t.preds = t.predRef ? (Number(t.predRef)+(t.rel||'FS')) : '';
           }
           if(t.pct===undefined) t.pct=0; if(t.infoReady===undefined) t.infoReady=false; if(t.materialReady===undefined) t.materialReady=false; if(t.labourReady===undefined) t.labourReady=false; if(t.link===undefined) t.link=''; if(t.vendor===undefined) t.vendor=''; if(!t.taskType) t.taskType='critical'; if(t.buffer===undefined) t.buffer=0;
+          if(t.unit===undefined) t.unit=''; if(t.plannedQty===undefined) t.plannedQty=''; if(t.actualQty===undefined) t.actualQty='';
           delete t.followBy; delete t.rel; delete t.predRef;
           t.subtasks.forEach(st => fixTask(st));
         }
@@ -3970,7 +4870,18 @@ applyTheme();
 // confirmed sync do we pull — which is what lets edits made from another device/tab show up here.
 if(projectExists && syncUrl && meta.name && meta.name.trim()){
   if(hasUnsyncedEdits){
-    syncToSheet(false);
+    // establish a real baseline BEFORE pushing — without this, lastKnownSyncedAt is still null
+    // on this fresh page load, and syncToSheet()'s own staleness guard (added to stop a stale tab
+    // silently overwriting newer data) would block the push every time with nothing to compare
+    // against, which looked like being permanently stuck even across reloads.
+    (async () => {
+      try {
+        const mUrl = syncUrl + (syncUrl.includes('?') ? '&' : '?') + 'action=load_meta&project=' + encodeURIComponent(meta.name) + '&_ts=' + Date.now();
+        const mData = await fetchJsonRetry_(mUrl, 1);
+        if(mData && mData.ok) lastKnownSyncedAt = mData.syncedAt || null;
+      } catch(e){ /* if this fails, syncToSheet's own check below will fail open on the network error too */ }
+      syncToSheet(false);
+    })();
   } else {
     autoPullLatest();
   }
@@ -3981,9 +4892,23 @@ if(projectExists && syncUrl && meta.name && meta.name.trim()){
 // it into that particular push: within ~10s, the next automatic push always carries whatever is
 // actually in the fields at that moment, without needing to touch/re-edit anything manually.
 setInterval(() => {
+  if(typeof document!=='undefined' && document.visibilityState==='hidden') return; // background tab — don't overwrite an active tab's saves with this one's stale memory
   if(autoSync && projectExists && syncUrl && !syncInFlight) syncToSheet(false);
 }, 10000);
+// v3 — the live multi-user field-sync loop: every 3 seconds, push whatever units changed locally
+// and pull whatever units any OTHER session changed, merging them in. Runs independently of (and
+// much more often than) the 10-second full-sync safety net above — see unitsPushPullTick()'s own
+// comment for the full design. No-ops on its own whenever there's no synced project open yet.
+setInterval(() => { unitsPushPullTick(); }, 3000);
+// v3.1 — the "Sheet-as-input" pull: picks up Manoj's edits to existing tasks and any brand-new
+// task rows he's typed directly into the Task list tab. A little less frequent than the units
+// tick (4s vs 3s) purely to spread the two background network calls apart in time.
+setInterval(() => { taskListPullTick(); }, 4000);
 document.addEventListener('keydown', function(ev){
+  if(ev.key==='Escape'){
+    const overlay = document.getElementById('phase-drilldown-overlay');
+    if(overlay && overlay.style.display==='flex'){ closePhaseDrilldown(); return; }
+  }
   const mod = ev.ctrlKey || ev.metaKey;
   if(!mod) return;
   const key = ev.key.toLowerCase();
