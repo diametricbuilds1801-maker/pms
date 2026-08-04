@@ -1876,6 +1876,38 @@ function renderDoerSuggestions(){
   if(!dl) return;
   dl.innerHTML = doerSuggestions().map(v => `<option value="${String(v).replace(/"/g,'&quot;')}"></option>`).join('');
 }
+// v3.2 — the "Doer" dropdown source: unique names currently entered in the Project team table
+// (Summary tab), in role order. Kept as a plain function (not cached) since team names can change
+// live via the reverse-sync from the Sheet — always reads meta.team fresh.
+function teamNameList(){
+  const seen = new Set();
+  const out = [];
+  if(meta.team){
+    teamRoles.forEach(([k]) => {
+      const n = meta.team[k] && meta.team[k].name && meta.team[k].name.trim();
+      if(n && !seen.has(n)){ seen.add(n); out.push(n); }
+    });
+  }
+  return out;
+}
+// builds a <select> for a Doer field, populated from the current Project team names. The task's
+// EXISTING value is always kept selectable even if it isn't (or is no longer) a team name — e.g.
+// a vendor's own site staff, or a name typed before the matching team-member row existed — so
+// switching to a dropdown never silently loses or resets what was already there.
+function doerSelectHtml(path, currentValue, width){
+  const names = teamNameList();
+  const cur = String(currentValue||'');
+  const opts = ['<option value="">— select —</option>'];
+  let curIncluded = false;
+  names.forEach(n => {
+    if(n===cur) curIncluded = true;
+    opts.push(`<option value="${String(n).replace(/"/g,'&quot;')}" ${n===cur?'selected':''}>${escHtml(n)}</option>`);
+  });
+  if(cur && !curIncluded){
+    opts.push(`<option value="${cur.replace(/"/g,'&quot;')}" selected>${escHtml(cur)} (not in team list)</option>`);
+  }
+  return `<select onchange="${path}.owner=this.value; scheduleAutoSync(); update();" style="width:${width||130}px; font-size:11.5px; height:25px;">${opts.join('')}</select>`;
+}
 // shared "Checklists" cell — just the general "Link" field from the Task list tab (column 17,
 // t.link), shown as a single clickable icon. Used by both the "3 days planning" tab and the
 // "Daily follow-up" tab so a link pasted anywhere for a task shows up consistently in both places.
@@ -1903,7 +1935,7 @@ function renderLookahead(){
   const dEl = document.getElementById('lh-date'); if(dEl) dEl.textContent = fmtD(from);
   const nEl = document.getElementById('lh-days'); if(nEl) nEl.value = lookahead.days;
   const today = new Date(); today.setHours(0,0,0,0);
-  const doerCell = (t,path) => `<input type="text" list="doer-suggestions" value="${(t.owner||'').replace(/"/g,'&quot;')}" placeholder="Doer name" oninput="${path}.owner=this.value; scheduleAutoSync();" style="width:130px; font-size:11.5px; height:25px;">`;
+  const doerCell = (t,path) => doerSelectHtml(path, t.owner, 130);
   const unitCell = (t,path) => `<input type="text" value="${String(t.unit||'').replace(/"/g,'&quot;')}" placeholder="e.g. sqft, cum" oninput="${path}.unit=this.value; scheduleAutoSync();" style="width:90px; font-size:11.5px; height:25px;">`;
   // qty edits only need to (a) save the value and (b) refresh the Variance cell right next to it —
   // they never touch scheduling/dates, so calling the app-wide update() here (as this used to) was
@@ -1986,7 +2018,7 @@ function dailyRowHtml(r){
   return `<div style="display:flex; align-items:center; gap:8px; padding:5px 6px; border-bottom:0.5px solid var(--border); flex-wrap:wrap; ${overdue ? 'background:rgba(163,45,45,0.07);' : ''}">
     <div style="flex:1; min-width:180px; font-size:12.5px;">${t.name} <span style="color:${color}; font-size:10px; font-weight:600;">(${type})</span>${overdueBadge}</div>
     <span style="font-size:11.5px; font-weight:600; color:${s.color};">${s.label}</span>
-    <input type="text" value="${supervisorVal.replace(/"/g,'&quot;')}" placeholder="Site supervisor" oninput="${path}.owner=this.value; scheduleAutoSync();" style="width:130px; font-size:11.5px; height:26px;">
+    ${doerSelectHtml(path, supervisorVal, 130)}
     ${followBadge}
     <select onchange="${path}.shift=this.value; update();" style="width:120px; font-size:11.5px; height:26px;">
       <option value="1" ${t.shift==='1'?'selected':''}>First half</option>
@@ -2268,7 +2300,7 @@ function milestoneListRow(mi, m){
   const target = taskByNumber(m.predNum);
   const day = milestoneDay(m);
   const dateTxt = day!==null ? fmtD(dateAt(day)) : '—';
-  const doerCell = `<input type="text" value="${String(m.owner||'').replace(/"/g,'&quot;')}" oninput="milestones[${mi}].owner=this.value; scheduleAutoSync();" placeholder="Doer" style="width:120px; font-size:11.5px; height:24px;">`;
+  const doerCell = doerSelectHtml(`milestones[${mi}]`, m.owner, 120);
   return `<tr style="background:rgba(31,127,174,0.06);">
     <td style="color:#1F7FAE; font-weight:700; font-size:11px;">${milestoneAddressLabel(m)}</td>
     <td class="l">${inpText(m.name, `milestones[${mi}].name=this.value;`, 150)}</td>
@@ -3138,7 +3170,7 @@ function createAll(){
       : `<input type="date" id="lpf-${kind}-${i}" value="${fmtISO(dateAt(t.end))}" onchange="${path}.duration=Math.max(1,(dayFromDateStr(this.value)||0)-(${path}.start||0)); update();" title="Set an exact finish date — adjusts this task's duration to land on it" style="height:24px; font-size:10px; width:112px;">`;
     const linkCell = `<div style="display:flex; align-items:center; gap:4px;">${inpText(t.link, `${path}.link=this.value;`, 150)}<button class="iconbtn" onclick="openLink(${path})" title="Open link"><i class="ti ti-external-link"></i></button></div>`;
     const vendorCell = `<input type="text" list="vendor-suggestions" value="${String(t.vendor||'').replace(/"/g,'&quot;')}" oninput="${path}.vendor=this.value; scheduleAutoSync();" placeholder="Vendor" title="Who to follow up with for this task" style="width:130px; font-size:11.5px; height:24px;">`;
-    const doerCell = `<input type="text" value="${String(t.owner||'').replace(/"/g,'&quot;')}" oninput="${path}.owner=this.value; update();" placeholder="Doer" title="Who's doing this task" style="width:120px; font-size:11.5px; height:24px;">`;
+    const doerCell = doerSelectHtml(path, t.owner, 120);
     const critCell = kind==='crit'
       ? `<span style="display:flex; align-items:center; gap:4px;"><span style="font-size:11px; font-weight:600; color:var(--amber);">Critical</span>${criticalTasks.length>1 ? `<button class="iconbtn" onclick="convertCriticalToFeeding(${i})" title="Convert to a feeding chain" style="width:18px; height:18px;"><i class="ti ti-arrows-exchange" style="font-size:11px;"></i></button>` : ''}</span>`
       : `<span style="display:flex; align-items:center; gap:4px;"><span style="font-size:11px; font-weight:600; color:#0F6E56;">Feeding</span><button class="iconbtn" onclick="convertFeedingToCritical(${i})" title="Convert to a critical-chain task" style="width:18px; height:18px;"><i class="ti ti-arrows-exchange" style="font-size:11px;"></i></button></span>`;
@@ -3191,7 +3223,7 @@ function createAll(){
       </div>`;
     const linkCell = `<div style="display:flex; align-items:center; gap:4px;">${inpText(st.link, `${path}.link=this.value;`, 150)}<button class="iconbtn" onclick="openLink(${path})" title="Open link"><i class="ti ti-external-link"></i></button></div>`;
     const vendorCell = `<input type="text" list="vendor-suggestions" value="${String(st.vendor||'').replace(/"/g,'&quot;')}" oninput="${path}.vendor=this.value; scheduleAutoSync();" placeholder="Vendor" title="Who to follow up with for this task" style="width:130px; font-size:11.5px; height:24px;">`;
-    const doerCell = `<input type="text" value="${String(st.owner||'').replace(/"/g,'&quot;')}" oninput="${path}.owner=this.value; update();" placeholder="Doer" title="Who's doing this task" style="width:120px; font-size:11.5px; height:24px;">`;
+    const doerCell = doerSelectHtml(path, st.owner, 120);
     const critCell = kind==='feed'
       ? `<span style="font-size:11px; font-weight:600; color:#0F6E56;">Feeding</span>`
       : `<span style="font-size:11px; font-weight:600; color:var(--amber);">Critical</span>`;
