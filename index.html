@@ -4396,6 +4396,7 @@ async function taskListPullTick(){
       }
       const dirtyTeamKeys = Object.keys(dirtyTeam);
       if(dirtyTeamKeys.length){
+        console.log('[team-sync] PUSHING (local differs from last-known-synced):', dirtyTeamKeys.map(k => k+'='+JSON.stringify(dirtyTeam[k].tuple)+' (snapshot was '+teamRowSnapshot[k]+')'));
         const payloadTeam = {};
         dirtyTeamKeys.forEach(k => { payloadTeam[k] = dirtyTeam[k].tuple; });
         try {
@@ -4411,15 +4412,17 @@ async function taskListPullTick(){
       const teamUrl = syncUrl + (syncUrl.includes('?') ? '&' : '?') + 'action=pull_team_rows&project=' + encodeURIComponent(meta.name) + '&_ts=' + Date.now();
       const teamRes = await fetch(teamUrl, {cache:'no-store'});
       const teamData = await teamRes.json();
+      console.log('[team-sync] PULLED from Sheet:', teamData);
       if(teamData && teamData.ok){
         const roleLabelToKey = {};
-        teamRoles.forEach(([k,label]) => { roleLabelToKey[label] = k; });
+        teamRoles.forEach(([k,label]) => { roleLabelToKey[label.trim()] = k; });
         (teamData.rows || []).forEach(r => {
-          const key = roleLabelToKey[r.role];
-          if(!key) return;
+          const key = roleLabelToKey[String(r.role||'').trim()];
+          if(!key){ console.log('[team-sync] no key match for role label:', JSON.stringify(r.role)); return; }
           const tuple = {name: r.name||'', phone: r.phone||''};
           const tupleJson = JSON.stringify(tuple);
-          if(teamRowSnapshot[key] === tupleJson) return;
+          if(teamRowSnapshot[key] === tupleJson){ console.log('[team-sync]', key, 'unchanged, skipping'); return; }
+          console.log('[team-sync] APPLYING from Sheet:', key, tuple, '(snapshot was', teamRowSnapshot[key], ')');
           if(!meta.team) meta.team = emptyTeam();
           if(!meta.team[key]) meta.team[key] = {name:'', phone:''};
           meta.team[key].name = tuple.name;
