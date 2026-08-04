@@ -4934,11 +4934,11 @@ setInterval(() => {
 // and pull whatever units any OTHER session changed, merging them in. Runs independently of (and
 // much more often than) the 10-second full-sync safety net above — see unitsPushPullTick()'s own
 // comment for the full design. No-ops on its own whenever there's no synced project open yet.
-setInterval(() => { unitsPushPullTick(); }, 3000);
+setInterval(() => { unitsPushPullTick(); }, 6000);
 // v3.1 — the "Sheet-as-input" pull: picks up Manoj's edits to existing tasks and any brand-new
 // task rows he's typed directly into the Task list tab. A little less frequent than the units
 // tick (4s vs 3s) purely to spread the two background network calls apart in time.
-setInterval(() => { taskListPullTick(); }, 4000);
+setInterval(() => { taskListPullTick(); }, 8000);
 document.addEventListener('keydown', function(ev){
   if(ev.key==='Escape'){
     const overlay = document.getElementById('phase-drilldown-overlay');
