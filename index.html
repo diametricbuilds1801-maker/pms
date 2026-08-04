@@ -4277,34 +4277,10 @@ async function unitsPushPullTick(){
         dirty.forEach(d => { unitSnapshots[d.id] = d.json; });
       } catch(pushErr){ /* next tick will see the same units still dirty and retry naturally */ }
     }
-    try {
-      const url = syncUrl + (syncUrl.includes('?') ? '&' : '?') + 'action=pull_units&project=' + encodeURIComponent(meta.name) + '&since=' + encodeURIComponent(lastUnitsPullTs) + '&_ts=' + Date.now();
-      const res = await fetch(url, {cache:'no-store'});
-      const data = await res.json();
-      if(data && data.ok){
-        let applied = false;
-        (data.units || []).forEach(u => {
-          if(unitSnapshots[u.id] === u.json) return; // this is just an echo of something WE pushed — nothing new to apply
-          if(u.id === '__meta__'){ try { meta = JSON.parse(u.json); applied = true; } catch(e){} }
-          else if(u.id === '__milestones__'){ try { milestones = JSON.parse(u.json); applied = true; } catch(e){} }
-          else if(u.id === '__vendorPayments__'){ try { vendorPayments = JSON.parse(u.json); applied = true; } catch(e){} }
-          else {
-            const target = allTopLevelTasks().find(t => t.id === u.id);
-            if(target){ try { Object.assign(target, JSON.parse(u.json)); applied = true; } catch(e){} }
-            // an id we don't recognize locally = a task added/removed structurally elsewhere —
-            // deliberately left alone here (Stage 1 scope); it'll show up on the next full reload
-            // / "Switch project" / "Reload from Sheet", same as before this feature existed.
-          }
-          unitSnapshots[u.id] = u.json;
-        });
-        lastUnitsPullTs = data.serverNow || lastUnitsPullTs;
-        if(applied){
-          suppressSnapshot = true;
-          createAll();
-          suppressSnapshot = false;
-        }
-      }
-    } catch(pullErr){ /* silent — next tick tries again; this is a background convenience loop, not a user-facing action */ }
+    // Pull-from-other-sessions has been turned OFF by request (push-only now — tool edits still
+    // save to the Sheet, nothing pulls back from elsewhere anymore). The old pull logic is kept
+    // just above this comment in version history if it's ever wanted back — search for
+    // "action=pull_units" elsewhere in this file for the still-working backend endpoint.
   } finally {
     unitsTickInFlight = false;
   }
@@ -4934,11 +4910,12 @@ setInterval(() => {
 // and pull whatever units any OTHER session changed, merging them in. Runs independently of (and
 // much more often than) the 10-second full-sync safety net above — see unitsPushPullTick()'s own
 // comment for the full design. No-ops on its own whenever there's no synced project open yet.
-setInterval(() => { unitsPushPullTick(); }, 6000);
-// v3.1 — the "Sheet-as-input" pull: picks up Manoj's edits to existing tasks and any brand-new
-// task rows he's typed directly into the Task list tab. A little less frequent than the units
-// tick (4s vs 3s) purely to spread the two background network calls apart in time.
-setInterval(() => { taskListPullTick(); }, 8000);
+setInterval(() => { unitsPushPullTick(); }, 3000);
+// v3.1 "Sheet-as-input" pull (reading Manoj's Task list/Project team edits back from the Sheet)
+// has been turned OFF by request — it made the tool feel sluggish, and edits are meant to flow
+// one-way (tool -> Sheet) only from here on. taskListPullTick() itself is left defined further up
+// this file, unused, in case this is ever wanted again later — just uncomment the line below.
+// setInterval(() => { taskListPullTick(); }, 8000);
 document.addEventListener('keydown', function(ev){
   if(ev.key==='Escape'){
     const overlay = document.getElementById('phase-drilldown-overlay');
