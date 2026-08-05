@@ -115,7 +115,7 @@
       <button id="btn-bw" onclick="toggleGrayscale()" class="no-print" title="Toggle black &amp; white view (useful for printing or low-colour displays)" style="font-size:11px; padding:5px 9px; margin-top:1px; flex-shrink:0;"><i class="ti ti-contrast-2" style="font-size:14px;"></i></button>
       <button id="btn-theme" onclick="toggleTheme()" class="no-print" title="Switch between dark and light theme" style="font-size:11px; padding:5px 9px; margin-top:1px; flex-shrink:0;"><i class="ti ti-moon" style="font-size:14px;"></i></button>
       <div>
-        <div style="font-size:11px; font-weight:700; color:var(--gold); letter-spacing:1px;">DIAMETRIC BUILDS <span style="font-weight:400; color:var(--text-muted); letter-spacing:0;">· build 2026-07-27-projectexists-fix</span></div>
+        <div style="font-size:11px; font-weight:700; color:var(--gold); letter-spacing:1px;">DIAMETRIC BUILDS <span style="font-weight:400; color:var(--text-muted); letter-spacing:0;">· build 2026-08-05-doerview-v3</span></div>
         <h1>DB Planning Project — critical chain planner &amp; tracker</h1>
         <div style="font-size:11.5px; color:var(--text-secondary); margin-top:2px;">Currently editing: <span id="active-project-badge" style="font-weight:600; color:var(--gold);"></span></div>
       </div>
@@ -277,6 +277,7 @@
           <th data-col="10" style="position:relative;">10. Planned start<span class="col-resize-handle"></span></th><th data-col="11" style="position:relative;">11. Planned finish<span class="col-resize-handle"></span></th><th class="l" data-col="12" style="padding-left:8px; position:relative;">12. Actual finish<span class="col-resize-handle"></span></th><th data-col="13" style="position:relative;">13. Delay (days)<span class="col-resize-handle"></span></th>
           <th class="col-budget" data-col="14" style="position:relative;">14. Plan (₹K)<span class="col-resize-handle"></span></th><th class="col-budget" data-col="15" style="position:relative;">15. Actual (₹K)<span class="col-resize-handle"></span></th><th class="col-budget" data-col="16" style="position:relative;">16. Variance (₹K)<span class="col-resize-handle"></span></th><th class="l" data-col="17" style="padding-left:8px; position:relative;">17. Link<span class="col-resize-handle"></span></th>
           <th class="l" data-col="18" style="padding-left:8px; position:relative;">18. Vendor<span class="col-resize-handle"></span></th><th class="l" data-col="19" style="padding-left:8px; position:relative;">19. Quality check<span class="col-resize-handle"></span></th>
+          <th class="l" data-col="20" style="padding-left:8px; position:relative;">20. Units<span class="col-resize-handle"></span></th><th data-col="21" style="position:relative;">21. Planned qty<span class="col-resize-handle"></span></th><th data-col="22" style="position:relative;">22. Actual qty<span class="col-resize-handle"></span></th><th data-col="23" style="position:relative;">23. Qty Variance<span class="col-resize-handle"></span></th>
         </tr>
       </thead>
       <tbody id="lrows"></tbody>
@@ -397,6 +398,20 @@
 
 </div>
 
+<!-- Doer View — a separate, minimal page hidden behind a ?doer=NAME URL parameter, for sharing
+     with a specific worker/contractor so they see ONLY their own tasks and can mark progress,
+     without any access to the rest of the project. Shares the SAME live in-memory task objects
+     and the SAME sync pipeline as the full tool (see initDoerViewIfNeeded()/renderDoerView() in
+     the script below) — it's purely an alternate, filtered rendering, not a separate data path. -->
+<div id="doer-view" style="display:none; max-width:640px; margin:0 auto; padding:1.5rem;">
+  <div style="margin-bottom:18px;">
+    <div style="font-size:11px; font-weight:700; color:var(--gold); letter-spacing:1px;">DIAMETRIC BUILDS</div>
+    <h1 id="doer-view-title" style="font-size:20px; font-weight:600; margin:4px 0 2px;"></h1>
+    <p style="font-size:12.5px; color:var(--text-secondary); margin:2px 0 0;">Apne tasks yahan dekho aur update karo — % complete aur jab khatam ho jaye to Actual finish date.</p>
+  </div>
+  <div id="doer-view-rows"></div>
+</div>
+
 <!-- Phase drill-down modal — opened by a 3-second long-press on a phase's Gantt bar. Sub-tasks
      edited here are the SAME objects used everywhere else in the tool, so every change (name,
      duration, predecessor, %) is immediately reflected back in the Gantt/Task list once closed. -->
@@ -422,11 +437,15 @@ const teamRoles = [
 ];
 function emptyTeam(){ const t={}; teamRoles.forEach(([k])=>{ t[k]={name:'',phone:''}; }); return t; }
 
+// Doer View (?doer=NAME) filter — declared here (early) rather than down near where it's set,
+// so lookaheadRows() (called during ordinary page load, long before the Doer View init code
+// runs) always finds it safely defined as null, never undefined/uninitialized.
+let doerFilterName = null;
 let meta = {name:'Residential Build — Stilt + 4 + Mumty & Lift (300 sq yd)', client:'[Client name]', location:'[Site address]', start:'2026-08-01', deliveryDate:'2028-07-10', dayStart:'08:00', qaLink:'', team: emptyTeam()};
 let activeTabId = 'summary';
-let lookahead = {from: new Date().toISOString().slice(0,10), days: 3};
+let lookahead = {from: todayISO(), days: 3};
 let readiness_ = {days: 7};
-let daily = {date: (()=>{ const d=new Date(); d.setDate(d.getDate()+1); return d.toISOString().slice(0,10); })()};
+let daily = {date: (()=>{ const d=new Date(); d.setDate(d.getDate()+1); return fmtISO(d); })()};
 let zoomPct = 100;
 // Google Sheet sync — syncUrl is the Apps Script Web App URL (see the bundled Code.gs); when
 // autoSync is on, every update() call schedules a debounced push so the Sheet mirrors the tool.
@@ -982,11 +1001,20 @@ function aboveGlobalIndex(idx, isFeed, nCrit){
 }
 // resolves one predecessor constraint (a relation type + the already-scheduled predecessor task)
 // into a candidate start day for the dependent task t.
+//
+// If the predecessor has an ACTUAL finish date recorded (t.adate — set by hand, or auto-filled
+// when % reaches 100), that real date is used in place of its planned finish for FS/FF relations
+// — so a task that actually wrapped up early or late pulls its successors' dates along with it,
+// instead of the schedule staying frozen at the original planned finish forever. There's no
+// "actual start" tracked anywhere in this tool, so SS/SF (which anchor to the predecessor's
+// START, not finish) are deliberately left alone — always the planned start.
 function relStart(rel, prev, t){
+  const actualEndDay = prev.adate ? dayFromDateStr(prev.adate) : null;
+  const effectiveEnd = (actualEndDay!==null && !isNaN(actualEndDay)) ? actualEndDay : prev.end;
   if(rel==='SS') return prev.start;
-  if(rel==='FF') return prev.end - t.duration;
+  if(rel==='FF') return effectiveEnd - t.duration;
   if(rel==='SF') return prev.start - t.duration;
-  return prev.end; // FS (default)
+  return effectiveEnd; // FS (default)
 }
 // ---- Sub-task cross-links (Predecessor Successor tab feature) ----
 // A SEPARATE parser from parsePreds() above — kept entirely independent so the existing top-level
@@ -1083,11 +1111,20 @@ function schedule(){
     const buf = safetyBuf(st, isFeed);
     const parsed = parseSubPreds(st.preds);
     let starts = [];
+    if(st.preds){
+      console.log('[REL-DEBUG] sub-task "'+st.name+'" raw preds="'+st.preds+'" parsed=', JSON.stringify(parsed));
+    }
     if(parsed.length){
       parsed.forEach(p => {
         if(!p.ref) return;
         const prevTask = resolveSubRef(p.ref);
-        if(prevTask) starts.push(relStart(p.rel, prevTask, st));
+        if(prevTask){
+          const candidateStart = relStart(p.rel, prevTask, st);
+          if(st.preds) console.log('[REL-DEBUG]   ref="'+p.ref+'" rel="'+p.rel+'" -> resolved to "'+prevTask.name+'" (adate="'+prevTask.adate+'", planned end='+prevTask.end+') -> candidate start='+candidateStart);
+          starts.push(candidateStart);
+        } else if(st.preds){
+          console.log('[REL-DEBUG]   ref="'+p.ref+'" did NOT resolve to any task/sub-task (check the number is correct)');
+        }
       });
     }
     if(!starts.length){
@@ -1105,6 +1142,7 @@ function schedule(){
     let s = starts.length ? Math.max(...starts) : 0;
     if(isNaN(s)) s = 0; // safety net — a degenerate circular/reentrant reference should never propagate into a garbage date; fall back to project start instead
     s = Math.max(0, s) + buf;
+    if(st.preds) console.log('[REL-DEBUG]   FINAL start for "'+st.name+'" = day '+s+' ('+dateAt(s).toDateString()+')');
     st.start = s; st.end = s + st.duration;
     subComputed.set(key, true); subVisiting.set(key, false);
   }
@@ -1569,6 +1607,10 @@ function update(){
     setDateVal('lpf-crit-'+i, dateAt(t.end));
     setT('ldl-crit-'+i, delayHtml(t));
     setT('lvr-crit-'+i, varHtml(t));
+    {
+      const adateInp = document.getElementById('ladateinp-crit-'+i);
+      if(adateInp && document.activeElement !== adateInp) adateInp.value = t.adate || '';
+    }
     setT('lrel-crit-'+i, predsLabelText('crit',i,t));
     setT('lfeeds-crit-'+i, predsSummaryNames('crit',i,t));
     setT('gdoer-crit-'+i, escHtml(t.owner||''));
@@ -1600,6 +1642,7 @@ function update(){
         setT(`ldl-crit-${i}-s-${si}`, delayHtml(st));
         setT(`lvr-crit-${i}-s-${si}`, varHtml(st));
         setT(`gdoer-crit-${i}-s-${si}`, escHtml(st.owner||''));
+        setT(`lfeeds-crit-${i}-s-${si}`, predsSummaryNamesSub(si, st));
       });
     }
   });
@@ -1633,6 +1676,10 @@ function update(){
     setDateVal('lpf-feed-'+ci, dateAt(t.end));
     setT('ldl-feed-'+ci, delayHtml(t));
     setT('lvr-feed-'+ci, varHtml(t));
+    {
+      const adateInp = document.getElementById('ladateinp-feed-'+ci);
+      if(adateInp && document.activeElement !== adateInp) adateInp.value = t.adate || '';
+    }
     setT('lrel-feed-'+ci, predsLabelText('feed',ci,t));
     setT('gdoer-feed-'+ci, escHtml(t.owner||''));
     if(hasSub(t)){
@@ -1663,6 +1710,7 @@ function update(){
         setT(`ldl-feed-${ci}-s-${si}`, delayHtml(st));
         setT(`lvr-feed-${ci}-s-${si}`, varHtml(st));
         setT(`gdoer-feed-${ci}-s-${si}`, escHtml(st.owner||''));
+        setT(`lfeeds-feed-${ci}-s-${si}`, predsSummaryNamesSub(si, st));
       });
     }
   });
@@ -1716,10 +1764,11 @@ function followOwner(t, today){
 
 function lookaheadRows(){
   const from = new Date(); from.setHours(0,0,0,0);
-  lookahead.from = from.toISOString().slice(0,10);
+  lookahead.from = fmtISO(from);
   const winEnd = new Date(from); winEnd.setDate(winEnd.getDate() + (Number(lookahead.days)||3));
   const rows = [];
   function consider(kind,i,t,si){
+    if(doerFilterName && String(t.owner||'').trim().toLowerCase() !== doerFilterName.toLowerCase()) return;
     const ps = dateAt(t.start), pf = dateAt(t.end);
     const overdueUnfinished = !t.adate && pf < from;
     if((ps <= winEnd && pf >= from) || overdueUnfinished){ rows.push({t, kind, i, si, type: kind==='crit'?'Critical':'Feeding', color: kind==='crit'?'#D85A30':'#0F6E56', overdue: overdueUnfinished}); }
@@ -1929,6 +1978,22 @@ function lhPatchVariance(kind,i,si){
   const t = taskFromHandle(kind, i, si);
   if(!t) return;
   setT(lhVarianceCellId(kind,i,si), lhVarianceHtml(t));
+}
+// Task list tab's own Units/Planned qty/Actual qty/Variance columns (20-23) — same underlying
+// t.unit/t.plannedQty/t.actualQty fields the "3 days planning" tab already uses, so editing
+// either place shows up in both automatically. Mirrors lhVarianceCellId/lhPatchVariance's
+// targeted-patch pattern (not a full update()) so typing a qty value here doesn't lose focus.
+function tlVarianceCellId(kind,i,si){ return `tl-var-${kind}-${i}-${(si===null||si===undefined)?'x':si}`; }
+function tlPatchQtyVariance(kind,i,si){
+  const t = taskFromHandle(kind, i, si);
+  if(!t) return;
+  setT(tlVarianceCellId(kind,i,si), lhVarianceHtml(t));
+}
+function tlUnitCell(path, t){
+  return `<input type="text" value="${String(t.unit||'').replace(/"/g,'&quot;')}" placeholder="e.g. sqft, cum" oninput="${path}.unit=this.value; scheduleAutoSync();" style="width:80px; font-size:11px; height:24px;">`;
+}
+function tlQtyCell(path, t, field, kind, i, si){
+  return `<input type="number" step="any" value="${t[field]===undefined||t[field]===null?'':t[field]}" placeholder="Qty" oninput="${path}.${field}=this.value===''?'':(Number(this.value)||0); scheduleAutoSync(); tlPatchQtyVariance('${kind}',${i},${(si===null||si===undefined)?'null':si});" style="width:64px; font-size:11px; height:24px; text-align:right;">`;
 }
 function renderLookahead(){
   const {rows, from, winEnd} = lookaheadRows();
@@ -2319,6 +2384,7 @@ function milestoneListRow(mi, m){
     <td class="col-budget"></td><td class="col-budget"></td><td class="col-budget"></td>
     <td class="l"></td><td class="l"></td>
     <td class="l">${iconBtn('trash', `removeMilestone(${mi})`, 'Remove milestone')}</td>
+    <td></td><td></td><td></td><td></td>
   </tr>`;
 }
 function milestoneListRowsAfter(num){
@@ -2417,7 +2483,7 @@ function qcCell(t, path){
   </div>`;
 }
 function inpPct(value,path,width){
-  const onInput = `${path}.pct=Math.max(0,Math.min(100,Number(this.value)||0)); if(${path}.pct===100 && !${path}.adate){ ${path}.adate=new Date().toISOString().slice(0,10); } update();`;
+  const onInput = `${path}.pct=Math.max(0,Math.min(100,Number(this.value)||0)); if(${path}.pct===100 && !${path}.adate){ ${path}.adate=todayISO(); } update();`;
   return `<input type="number" min="0" max="100" step="5" value="${value||0}" oninput="${onInput} scheduleAutoSync();" title="% complete — reaching 100% fills in today's actual finish date if it's blank" style="width:${width}px; flex-shrink:0; font-size:10.5px; height:24px; text-align:right;">`;
 }
 function iconBtn(icon,onClick,title){ return `<button class="iconbtn" onclick="${onClick}" title="${title}"><i class="ti ti-${icon}"></i></button>`; }
@@ -3157,14 +3223,14 @@ function createAll(){
     const chev = sub ? `<button class="iconbtn" onclick="toggleExpand('${kind}',${i})" title="${t.expanded?'Collapse this phase back into its rollup bar':'Expand this phase into its sub-tasks'}" style="width:18px; height:18px; flex-shrink:0; border:0.5px solid var(--border-strong);"><i class="ti ti-chevron-${t.expanded?'down':'right'}" style="font-size:11px;"></i></button>` : `<span class="chev"></span>`;
     const nameCell = `<div style="display:flex; align-items:center; gap:4px; min-width:0; overflow:hidden;">${chev}${inpTextName(t.name, `${path}.name=this.value; update();`, sub?126:150, sub, true)}${sub?` <span class="phase-badge" style="cursor:pointer; flex-shrink:0;" onclick="openPhaseDrilldown('${kind}',${i})" title="Open this phase's full detail view — edit sub-tasks, relations, and see its mini-Gantt">PHASE · ${t.subtasks.length} <i class="ti ti-arrows-diagonal" style="font-size:9px; vertical-align:-1px;"></i></span> ${iconBtn('list-tree', `addSubtaskFromList('${kind}',${i})`, 'Add sub-task')}`:''}</div>`;
     const durCell = sub ? roSpan('ldur-'+kind+'-'+i, fmt(t.duration), true) : inpDur(t.duration, `${path}.duration=Math.max(1,Number(this.value)||1); update();`, 50);
-    const adateCell = sub ? `<span id="ladate-${kind}-${i}" style="font-size:11px; font-style:italic; color:var(--text-secondary);"></span>` : inpDate(t.adate, `${path}.adate=this.value; update();`, 116);
+    const adateCell = sub ? `<span id="ladate-${kind}-${i}" style="font-size:11px; font-style:italic; color:var(--text-secondary);"></span>` : inpDate(t.adate, `${path}.adate=this.value; update();`, 116).replace('<input', `<input id="ladateinp-${kind}-${i}"`);
     const planCell = sub ? roSpan('lplan-'+kind+'-'+i, (Number(t.plan)||0).toLocaleString('en-IN'), true) : inpBud(t.plan, `${path}.plan=this.value===''?'':(Number(this.value)||0); update();`, 56);
     const actCell = sub ? roSpan('lact-'+kind+'-'+i, t.act===''?'—':(Number(t.act)||0).toLocaleString('en-IN'), true) : inpBud(t.act, `${path}.act=this.value===''?'':(Number(this.value)||0); update();`, 56);
-    const relTxt = sub ? '' : `<span id="lrel-${kind}-${i}" title="Predecessor task #(s) + relation — e.g. 2FS,3SS. Edit in the Gantt tab.">${predsLabelText(kind,i,t)}</span>`;
+    const relTxt = sub ? '' : predsInput(path, t, kind, i);
     const pctCell = sub ? roSpan('lpct-'+kind+'-'+i, fmt(t.pct||0)+'%', true) : inpPct(t.pct, path, 46)+'%';
     const plannedStartCell = sub
       ? `<span id="lpd-${kind}-${i}" style="color:var(--text-secondary);"></span>`
-      : `<input type="date" id="lpd-${kind}-${i}" value="${fmtISO(dateAt(t.start))}" onchange="${path}.manualStart=dayFromDateStr(this.value); update();" title="Set an exact start date — same as dragging this task's bar in the Gantt tab. Leave the predecessor box (Gantt tab) to go back to automatic scheduling." style="height:24px; font-size:10px; width:112px;">`;
+      : `<div style="display:flex; align-items:center; gap:2px;"><input type="date" id="lpd-${kind}-${i}" value="${fmtISO(dateAt(t.start))}" onchange="${path}.manualStart=dayFromDateStr(this.value); update();" title="Set an exact start date — same as dragging this task's bar in the Gantt tab. Leave the predecessor box (Gantt tab) to go back to automatic scheduling." style="height:24px; font-size:10px; width:112px;">${t.manualStart!=null ? iconBtn('target-arrow', `clearManualStart('${kind}',${i},null)`, 'PINNED to this exact date — predecessor/relation and actual-finish updates are ignored while pinned. Click to release and go back to automatic scheduling.') : ''}</div>`;
     const plannedFinishCell = sub
       ? `<span id="lpf-${kind}-${i}" style="color:var(--text-secondary);"></span>`
       : `<input type="date" id="lpf-${kind}-${i}" value="${fmtISO(dateAt(t.end))}" onchange="${path}.duration=Math.max(1,(dayFromDateStr(this.value)||0)-(${path}.start||0)); update();" title="Set an exact finish date — adjusts this task's duration to land on it" style="height:24px; font-size:10px; width:112px;">`;
@@ -3208,6 +3274,10 @@ function createAll(){
       <td class="l" style="padding-left:8px;">${linkCell}</td>
       <td class="l" style="padding-left:8px;">${vendorCell}</td>
       <td class="l" style="padding-left:8px;">${qcCell(t, path)}</td>
+      <td class="l" style="padding-left:8px;">${tlUnitCell(path, t)}</td>
+      <td>${tlQtyCell(path, t, 'plannedQty', kind, i, null)}</td>
+      <td>${tlQtyCell(path, t, 'actualQty', kind, i, null)}</td>
+      <td id="${tlVarianceCellId(kind,i,null)}">${lhVarianceHtml(t)}</td>
     </tr>`;
   }
   function listSubRow(kind, i, si, st){
@@ -3235,13 +3305,13 @@ function createAll(){
       <td class="l" style="padding-left:20px;"><input type="text" value="${String(st.name).replace(/"/g,'&quot;')}" oninput="${path}.name=this.value; update(); scheduleAutoSync();" style="width:100%; box-sizing:border-box; min-width:60px; font-size:11.5px; height:24px;"></td>
       <td class="l" style="padding-left:8px;">${doerCell}</td>
       <td class="l"><span style="font-size:10px; color:var(--text-muted);">sub-task</span></td>
-      <td class="l" style="color:var(--text-muted); font-size:11px;">${predsSummaryNamesSub(si,st)}</td>
-      <td style="font-size:11px; font-weight:600;">${predsLabelTextSub(si,st)}</td>
+      <td class="l" style="color:var(--text-muted); font-size:11px;" id="lfeeds-${kind}-${i}-s-${si}">${predsSummaryNamesSub(si,st)}</td>
+      <td style="font-size:11px; font-weight:600;">${predsInputSub(path, st, kind, i, si)}</td>
       <td class="l" style="padding-left:8px;">${critCell}</td>
       <td>${bufCell}</td>
       <td>${inpDur(st.duration, `${path}.duration=Math.max(1,Number(this.value)||1); update();`, 50)}</td>
       <td>${inpPct(st.pct, path, 46)}%</td>
-      <td><input type="date" id="lpd-${kind}-${i}-s-${si}" value="${fmtISO(dateAt(st.start))}" onchange="${path}.manualStart=dayFromDateStr(this.value); update();" title="Set an exact start date — same as dragging this sub-task's bar in the Gantt tab" style="height:24px; font-size:10px; width:112px;"></td>
+      <td><div style="display:flex; align-items:center; gap:2px;"><input type="date" id="lpd-${kind}-${i}-s-${si}" value="${fmtISO(dateAt(st.start))}" onchange="${path}.manualStart=dayFromDateStr(this.value); update();" title="Set an exact start date — same as dragging this sub-task's bar in the Gantt tab" style="height:24px; font-size:10px; width:112px;">${st.manualStart!=null ? iconBtn('target-arrow', `clearManualStart('${kind}',${i},${si})`, 'PINNED to this exact date — predecessor/relation and actual-finish updates are ignored while pinned. Click to release and go back to automatic scheduling.') : ''}</div></td>
       <td><input type="date" id="lpf-${kind}-${i}-s-${si}" value="${fmtISO(dateAt(st.end))}" onchange="${path}.duration=Math.max(1,(dayFromDateStr(this.value)||0)-(${path}.start||0)); update();" title="Set an exact finish date — adjusts this sub-task's duration to land on it" style="height:24px; font-size:10px; width:112px;"></td>
       <td class="l" style="padding-left:8px;">${inpDate(st.adate, `${path}.adate=this.value; update();`, 116)}</td>
       <td id="ldl-${kind}-${i}-s-${si}"></td>
@@ -3251,6 +3321,10 @@ function createAll(){
       <td class="l" style="padding-left:8px;">${linkCell}</td>
       <td class="l" style="padding-left:8px;">${vendorCell}</td>
       <td class="l" style="padding-left:8px;">${qcCell(st, path)}</td>
+      <td class="l" style="padding-left:8px;">${tlUnitCell(path, st)}</td>
+      <td>${tlQtyCell(path, st, 'plannedQty', kind, i, si)}</td>
+      <td>${tlQtyCell(path, st, 'actualQty', kind, i, si)}</td>
+      <td id="${tlVarianceCellId(kind,i,si)}">${lhVarianceHtml(st)}</td>
     </tr>`;
   }
   criticalTasks.forEach((t,i) => {
@@ -3271,7 +3345,7 @@ function createAll(){
     <td></td>
     <td id="lpd-cbuf" style="color:var(--text-secondary);"></td>
     <td id="lpf-cbuf" style="color:var(--text-secondary);"></td>
-    <td></td><td></td><td class="col-budget"></td><td class="col-budget"></td><td class="col-budget"></td><td></td><td></td><td></td>
+    <td></td><td></td><td class="col-budget"></td><td class="col-budget"></td><td class="col-budget"></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td>
   </tr>`;
   feedingChains.forEach((fc,ci) => {
     const t = fc.tasks[0];
@@ -3287,7 +3361,7 @@ function createAll(){
   l += `<tr style="font-weight:600; border-top:2px solid var(--border-strong);">
     <td></td>
     <td class="l">Totals (₹ thousand)</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td>
-    <td class="col-budget" id="tot-plan"></td><td class="col-budget" id="tot-act"></td><td class="col-budget" id="tot-var"></td><td></td><td></td><td></td>
+    <td class="col-budget" id="tot-plan"></td><td class="col-budget" id="tot-act"></td><td class="col-budget" id="tot-var"></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td>
   </tr>`;
   document.getElementById('lrows').innerHTML = l;
   applyTaskListColWidths();
@@ -3966,10 +4040,10 @@ function newProject(){
   syncDirty = false;
   suppressSnapshot = true;
   const s = JSON.parse(origState); // this file's baked-in standard template (tasks, buffers, budgets, etc.)
-  meta = Object.assign({}, s.meta, {name:'', client:'', location:'', deliveryDate:'', start:new Date().toISOString().slice(0,10), team: emptyTeam()});
-  lookahead = {from: new Date().toISOString().slice(0,10), days: 3};
+  meta = Object.assign({}, s.meta, {name:'', client:'', location:'', deliveryDate:'', start:todayISO(), team: emptyTeam()});
+  lookahead = {from: todayISO(), days: 3};
   readiness_ = {days: 7};
-  daily = {date: (()=>{ const d=new Date(); d.setDate(d.getDate()+1); return d.toISOString().slice(0,10); })()};
+  daily = {date: (()=>{ const d=new Date(); d.setDate(d.getDate()+1); return fmtISO(d); })()};
   zoomPct = 100;
   criticalTasks = s.criticalTasks;
   feedingChains = s.feedingChains;
@@ -4087,7 +4161,21 @@ function buildSyncPayload(){
     syncedAt: new Date().toISOString()
   };
 }
-function fmtISO(d){ return d.toISOString().slice(0,10); }
+// CRITICAL FIX: was `d.toISOString().slice(0,10)`, which converts to UTC before formatting — for
+// anyone in a timezone ahead of UTC (e.g. India, UTC+5:30), local midnight falls into the
+// PREVIOUS UTC calendar day, silently shifting every date shown anywhere in this tool back by
+// exactly one day (this is what caused the whole "the relationship isn't landing on the right
+// date" investigation — the underlying schedule/relation math was correct the whole time; only
+// the DISPLAY conversion was wrong). Building the string from the Date object's own local
+// year/month/day components instead is timezone-safe no matter where the browser is.
+function fmtISO(d){
+  const y = d.getFullYear();
+  const m = String(d.getMonth()+1).padStart(2,'0');
+  const day = String(d.getDate()).padStart(2,'0');
+  return `${y}-${m}-${day}`;
+}
+// timezone-safe "today as YYYY-MM-DD" — see fmtISO()'s own comment above for why this matters.
+function todayISO(){ return fmtISO(new Date()); }
 // button reads "Create project" until a Sheet actually exists for this project, then flips to
 // "Sync now" — keeps the wording honest about what clicking it will do.
 function renderSyncButton(){
@@ -4124,7 +4212,7 @@ function scheduleAutoSync(){
   if(blockAutoSync) return;
   if(!autoSync || !projectExists || !syncUrl || !meta.name || !meta.name.trim()) return;
   clearTimeout(syncTimer);
-  syncTimer = setTimeout(() => syncToSheet(false), 800);
+  syncTimer = setTimeout(() => syncToSheet(false), 2000);
 }
 let lastSheetUrl = '';
 // Apps Script Web Apps sometimes redirect the POST response through script.googleusercontent.com,
@@ -4670,8 +4758,8 @@ async function onProjectPicked(name){
         const s2 = JSON.parse(retryData.rawState);
         suppressSnapshot = true;
         meta = s2.meta; criticalTasks = s2.criticalTasks; feedingChains = s2.feedingChains;
-        lookahead = s2.lookahead || {from: new Date().toISOString().slice(0,10), days: 3};
-        daily = s2.daily || {date: new Date().toISOString().slice(0,10)};
+        lookahead = s2.lookahead || {from: todayISO(), days: 3};
+        daily = s2.daily || {date: todayISO()};
         readiness_ = s2.readiness_ || {days: 7};
         zoomPct = s2.zoomPct || 100;
         vendorPayments = s2.vendorPayments || []; milestones = s2.milestones || [];
@@ -4699,10 +4787,10 @@ async function onProjectPicked(name){
       // checks the Sheet and clicks "Create project" themselves.
       suppressSnapshot = true;
       const s = JSON.parse(origState);
-      meta = Object.assign({}, s.meta, {name: name, client:'', location:'', deliveryDate:'', start:new Date().toISOString().slice(0,10), team: emptyTeam()});
-      lookahead = {from: new Date().toISOString().slice(0,10), days: 3};
+      meta = Object.assign({}, s.meta, {name: name, client:'', location:'', deliveryDate:'', start:todayISO(), team: emptyTeam()});
+      lookahead = {from: todayISO(), days: 3};
       readiness_ = {days: 7};
-      daily = {date: (()=>{ const d=new Date(); d.setDate(d.getDate()+1); return d.toISOString().slice(0,10); })()};
+      daily = {date: (()=>{ const d=new Date(); d.setDate(d.getDate()+1); return fmtISO(d); })()};
       zoomPct = 100;
       criticalTasks = s.criticalTasks;
       feedingChains = s.feedingChains;
@@ -4733,8 +4821,8 @@ async function onProjectPicked(name){
     const s = JSON.parse(data.rawState);
     suppressSnapshot = true;
     meta = s.meta; criticalTasks = s.criticalTasks; feedingChains = s.feedingChains;
-    lookahead = s.lookahead || {from: new Date().toISOString().slice(0,10), days: 3};
-    daily = s.daily || {date: new Date().toISOString().slice(0,10)};
+    lookahead = s.lookahead || {from: todayISO(), days: 3};
+    daily = s.daily || {date: todayISO()};
     readiness_ = s.readiness_ || {days: 7};
     zoomPct = s.zoomPct || 100;
     vendorPayments = s.vendorPayments || []; milestones = s.milestones || [];
@@ -4774,8 +4862,8 @@ function importJSON(evt){
       const s = JSON.parse(e.target.result);
       if(s.meta && s.criticalTasks && s.feedingChains){
         meta = s.meta; criticalTasks = s.criticalTasks; feedingChains = s.feedingChains;
-        lookahead = s.lookahead || {from: new Date().toISOString().slice(0,10), days: 3};
-        daily = s.daily || {date: new Date().toISOString().slice(0,10)};
+        lookahead = s.lookahead || {from: todayISO(), days: 3};
+        daily = s.daily || {date: todayISO()};
         readiness_ = s.readiness_ || {days: 7};
         zoomPct = s.zoomPct || 100;
         syncUrl = s.syncUrl || ''; autoSync = s.autoSync || false;
@@ -4873,6 +4961,40 @@ createAll();
 suppressSnapshot = false;
 resetHistory();
 applyTheme();
+// ---------------- Doer View (?doer=NAME) ----------------
+// A filtered rendering for sharing with one specific worker/contractor — reads the URL's `doer`
+// query parameter and, if present, hides everything EXCEPT the "3 days planning" tab, forces it
+// open, and filters its rows down to just that person's tasks. Deliberately reuses the SAME
+// lookaheadRows()/renderLookahead() the normal tab already uses (doerFilterName just narrows what
+// lookaheadRows() returns) — so a Doer's edits here go through the exact same fields/sync
+// pipeline as any other edit in the tool, no separate view logic to keep in sync.
+// (doerFilterName is declared near the top of the script, alongside the other early globals, so
+// it's already safely defined as null before any normal page-load code — including
+// lookaheadRows(), which reads it — ever runs.)
+function doerViewParam(){
+  try { return new URLSearchParams(window.location.search).get('doer'); } catch(e){ return null; }
+}
+function initDoerViewIfNeeded(){
+  const name = doerViewParam();
+  if(!name) return;
+  doerFilterName = name.trim();
+  // hide the top metrics cards and the tab button row — only the "3 days planning" content itself stays
+  const metricsEl = document.getElementById('metrics');
+  if(metricsEl) metricsEl.style.display = 'none';
+  document.querySelectorAll('.wrap > .no-print').forEach(el => { el.style.display = 'none'; });
+  ['summary','gantt','list','daily','vendors','milestones'].forEach(t => {
+    const el = document.getElementById('tab-'+t);
+    if(el) el.style.display = 'none';
+  });
+  const lookaheadTab = document.getElementById('tab-lookahead');
+  if(lookaheadTab) lookaheadTab.style.border = 'none';
+  const headerNote = document.createElement('div');
+  headerNote.style.cssText = 'font-size:13px; font-weight:600; color:var(--gold); margin-bottom:10px;';
+  headerNote.textContent = 'Tasks for ' + doerFilterName;
+  if(lookaheadTab) lookaheadTab.parentNode.insertBefore(headerNote, lookaheadTab);
+  showTab('lookahead');
+}
+initDoerViewIfNeeded();
 // The Sheet is authoritative — BUT only once we're sure local doesn't hold an edit the Sheet has
 // never seen. If the last session ended before a debounced auto-sync could land (e.g. the page was
 // reloaded right after typing something), hasUnsyncedEdits is still true from local storage: in
@@ -4897,20 +5019,23 @@ if(projectExists && syncUrl && meta.name && meta.name.trim()){
     autoPullLatest();
   }
 }
-// Safety-net resync: every 10 seconds, push the CURRENT full state to the Sheet (if auto-sync is
+// Safety-net resync: every 30 seconds, push the CURRENT full state to the Sheet (if auto-sync is
 // on and the project already exists) — independent of the per-edit debounce. This catches the
 // rare case where a value was still mid-edit right as a debounced sync fired and so didn't make
-// it into that particular push: within ~10s, the next automatic push always carries whatever is
+// it into that particular push: within ~30s, the next automatic push always carries whatever is
 // actually in the fields at that moment, without needing to touch/re-edit anything manually.
+// (Slowed from 10s -> 30s purely for performance — this full-project push recomputes the entire
+// schedule and re-serializes everything, which was the single biggest source of background load
+// competing with the UI; every real edit still saves within a couple of seconds via the normal
+// debounced scheduleAutoSync() path regardless, this interval is only the rare-case fallback.)
 setInterval(() => {
   if(typeof document!=='undefined' && document.visibilityState==='hidden') return; // background tab — don't overwrite an active tab's saves with this one's stale memory
   if(autoSync && projectExists && syncUrl && !syncInFlight) syncToSheet(false);
-}, 10000);
-// v3 — the live multi-user field-sync loop: every 3 seconds, push whatever units changed locally
-// and pull whatever units any OTHER session changed, merging them in. Runs independently of (and
-// much more often than) the 10-second full-sync safety net above — see unitsPushPullTick()'s own
-// comment for the full design. No-ops on its own whenever there's no synced project open yet.
-setInterval(() => { unitsPushPullTick(); }, 3000);
+}, 30000);
+// v3 — the live multi-user field-sync loop: pushes whatever units changed locally to the Sheet.
+// Slowed from 3s -> 8s purely for performance (same reasoning as above) — still fast enough that
+// edits reliably save within a few seconds, just with less constant background work.
+setInterval(() => { unitsPushPullTick(); }, 8000);
 // v3.1 "Sheet-as-input" pull (reading Manoj's Task list/Project team edits back from the Sheet)
 // has been turned OFF by request — it made the tool feel sluggish, and edits are meant to flow
 // one-way (tool -> Sheet) only from here on. taskListPullTick() itself is left defined further up
