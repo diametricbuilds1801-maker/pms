@@ -115,7 +115,7 @@
       <button id="btn-bw" onclick="toggleGrayscale()" class="no-print" title="Toggle black &amp; white view (useful for printing or low-colour displays)" style="font-size:11px; padding:5px 9px; margin-top:1px; flex-shrink:0;"><i class="ti ti-contrast-2" style="font-size:14px;"></i></button>
       <button id="btn-theme" onclick="toggleTheme()" class="no-print" title="Switch between dark and light theme" style="font-size:11px; padding:5px 9px; margin-top:1px; flex-shrink:0;"><i class="ti ti-moon" style="font-size:14px;"></i></button>
       <div>
-        <div style="font-size:11px; font-weight:700; color:var(--gold); letter-spacing:1px;">DIAMETRIC BUILDS <span style="font-weight:400; color:var(--text-muted); letter-spacing:0;">· build 2026-08-05-doerview-v3</span></div>
+        <div style="font-size:11px; font-weight:700; color:var(--gold); letter-spacing:1px;">DIAMETRIC BUILDS <span style="font-weight:400; color:var(--text-muted); letter-spacing:0;">· build 2026-08-05-getpush-v4</span></div>
         <h1>DB Planning Project — critical chain planner &amp; tracker</h1>
         <div style="font-size:11.5px; color:var(--text-secondary); margin-top:2px;">Currently editing: <span id="active-project-badge" style="font-weight:600; color:var(--gold);"></span></div>
       </div>
@@ -4370,10 +4370,28 @@ async function unitsPushPullTick(){
     });
     console.log('[UNITS-DEBUG] tick ran — '+units.length+' units checked, '+dirty.length+' dirty:', dirty.map(d=>d.id));
     if(dirty.length){
-      try {
-        await submitUnitsViaHiddenForm_(JSON.stringify({kind:'units_push', project: meta.name, units: dirty}));
-        dirty.forEach(d => { unitSnapshots[d.id] = d.json; });
-      } catch(pushErr){ /* next tick will see the same units still dirty and retry naturally */ }
+      // v3.2 — GET-based push (see units_push_get in Code.gs) instead of the hidden-iframe-form
+      // POST, which started failing with 403s on its own internal proxy. Batched in small groups
+      // so the URL never gets too long for a single dirty unit's JSON (or several combined).
+      const MAX_BATCH_CHARS = 6000;
+      let batch = [], batchChars = 0;
+      const flushBatch = async () => {
+        if(!batch.length) return;
+        try {
+          const url = syncUrl + (syncUrl.includes('?') ? '&' : '?') + 'action=units_push_get&project=' + encodeURIComponent(meta.name) + '&payload=' + encodeURIComponent(JSON.stringify({units: batch}));
+          const res = await fetch(url, {cache:'no-store'});
+          const data = await res.json();
+          if(data && data.ok){ batch.forEach(u => { unitSnapshots[u.id] = u.json; }); }
+          console.log('[UNITS-DEBUG] GET push batch ('+batch.length+' units):', data);
+        } catch(pushErr){ console.log('[UNITS-DEBUG] GET push FAILED:', pushErr); }
+        batch = []; batchChars = 0;
+      };
+      for(const u of dirty){
+        const uChars = u.json.length + 20;
+        if(batch.length && batchChars + uChars > MAX_BATCH_CHARS){ await flushBatch(); }
+        batch.push(u); batchChars += uChars;
+      }
+      await flushBatch();
     }
     // Pull-from-other-sessions — re-enabled by request (this is what lets the Doer View's edits,
     // pushed from a separate tab, show up here without a manual reload). Kept on a slower interval
