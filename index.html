@@ -1770,6 +1770,12 @@ function lookaheadRows(){
   function consider(kind,i,t,si){
     if(doerFilterName && String(t.owner||'').trim().toLowerCase() !== doerFilterName.toLowerCase()) return;
     const ps = dateAt(t.start), pf = dateAt(t.end);
+    if(doerFilterName){
+      // Doer View: show this person's ENTIRE task list, not just what falls in the 3-day window —
+      // they need visibility into all their upcoming work, not just what's due immediately.
+      rows.push({t, kind, i, si, type: kind==='crit'?'Critical':'Feeding', color: kind==='crit'?'#D85A30':'#0F6E56', overdue: !t.adate && pf < from});
+      return;
+    }
     const overdueUnfinished = !t.adate && pf < from;
     if((ps <= winEnd && pf >= from) || overdueUnfinished){ rows.push({t, kind, i, si, type: kind==='crit'?'Critical':'Feeding', color: kind==='crit'?'#D85A30':'#0F6E56', overdue: overdueUnfinished}); }
   }
@@ -4348,7 +4354,10 @@ function seedUnitSnapshots(){
 // last-write-wins) — a deliberate, simple middle ground for Stage 1.
 async function unitsPushPullTick(){
   if(typeof document!=='undefined' && document.visibilityState==='hidden') return; // background tab — don't fight an active tab with stale memory
-  if(!projectExists || !syncUrl || !meta.name || !meta.name.trim() || blockAutoSync) return;
+  if(!projectExists || !syncUrl || !meta.name || !meta.name.trim() || blockAutoSync){
+    console.log('[UNITS-DEBUG] tick SKIPPED — projectExists='+projectExists+' syncUrl='+(!!syncUrl)+' meta.name="'+meta.name+'" blockAutoSync='+blockAutoSync);
+    return;
+  }
   if(unitsTickInFlight) return;
   unitsTickInFlight = true;
   try {
@@ -4359,16 +4368,43 @@ async function unitsPushPullTick(){
       const json = JSON.stringify(u.obj);
       if(unitSnapshots[u.id] !== json) dirty.push({id: u.id, json});
     });
+    console.log('[UNITS-DEBUG] tick ran — '+units.length+' units checked, '+dirty.length+' dirty:', dirty.map(d=>d.id));
     if(dirty.length){
       try {
         await submitUnitsViaHiddenForm_(JSON.stringify({kind:'units_push', project: meta.name, units: dirty}));
         dirty.forEach(d => { unitSnapshots[d.id] = d.json; });
       } catch(pushErr){ /* next tick will see the same units still dirty and retry naturally */ }
     }
-    // Pull-from-other-sessions has been turned OFF by request (push-only now — tool edits still
-    // save to the Sheet, nothing pulls back from elsewhere anymore). The old pull logic is kept
-    // just above this comment in version history if it's ever wanted back — search for
-    // "action=pull_units" elsewhere in this file for the still-working backend endpoint.
+    // Pull-from-other-sessions — re-enabled by request (this is what lets the Doer View's edits,
+    // pushed from a separate tab, show up here without a manual reload). Kept on a slower interval
+    // than before (see the setInterval near the bottom of this file) to keep background load light.
+    try {
+      const url = syncUrl + (syncUrl.includes('?') ? '&' : '?') + 'action=pull_units&project=' + encodeURIComponent(meta.name) + '&since=' + encodeURIComponent(lastUnitsPullTs) + '&_ts=' + Date.now();
+      const res = await fetch(url, {cache:'no-store'});
+      const data = await res.json();
+      if(data && data.ok){
+        let applied = false;
+        (data.units || []).forEach(u => {
+          if(unitSnapshots[u.id] === u.json) return; // this is just an echo of something WE pushed — nothing new to apply
+          if(u.id === '__meta__'){ try { meta = JSON.parse(u.json); applied = true; } catch(e){} }
+          else if(u.id === '__milestones__'){ try { milestones = JSON.parse(u.json); applied = true; } catch(e){} }
+          else if(u.id === '__vendorPayments__'){ try { vendorPayments = JSON.parse(u.json); applied = true; } catch(e){} }
+          else {
+            const target = allTopLevelTasks().find(t => t.id === u.id);
+            if(target){ try { Object.assign(target, JSON.parse(u.json)); applied = true; } catch(e){} }
+            // an id we don't recognize locally = a task added/removed structurally elsewhere —
+            // deliberately left alone here; it'll show up on the next full reload/switch instead.
+          }
+          unitSnapshots[u.id] = u.json;
+        });
+        lastUnitsPullTs = data.serverNow || lastUnitsPullTs;
+        if(applied){
+          suppressSnapshot = true;
+          if(doerFilterName) renderLookahead(); else createAll();
+          suppressSnapshot = false;
+        }
+      }
+    } catch(pullErr){ /* silent — next tick tries again */ }
   } finally {
     unitsTickInFlight = false;
   }
@@ -5032,10 +5068,10 @@ setInterval(() => {
   if(typeof document!=='undefined' && document.visibilityState==='hidden') return; // background tab — don't overwrite an active tab's saves with this one's stale memory
   if(autoSync && projectExists && syncUrl && !syncInFlight) syncToSheet(false);
 }, 30000);
-// v3 — the live multi-user field-sync loop: pushes whatever units changed locally to the Sheet.
-// Slowed from 3s -> 8s purely for performance (same reasoning as above) — still fast enough that
-// edits reliably save within a few seconds, just with less constant background work.
-setInterval(() => { unitsPushPullTick(); }, 8000);
+// v3 — the live multi-user field-sync loop: pushes local edits AND pulls remote ones (re-enabled
+// by request, specifically so the Doer View's edits show up elsewhere without a manual reload).
+// Set to 18s — a deliberate middle ground between responsiveness and background load.
+setInterval(() => { unitsPushPullTick(); }, 18000);
 // v3.1 "Sheet-as-input" pull (reading Manoj's Task list/Project team edits back from the Sheet)
 // has been turned OFF by request — it made the tool feel sluggish, and edits are meant to flow
 // one-way (tool -> Sheet) only from here on. taskListPullTick() itself is left defined further up
